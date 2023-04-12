@@ -4,7 +4,14 @@ checkpoints/
 /data/
 data_em/
 log/
+#/cppext/
 *.txt
 #*.sh
 *.out
 *.nt
+build/
+dist/
+*.so
+*.o
+*.egg
+*egg-info/

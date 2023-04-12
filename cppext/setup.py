@@ -33,7 +33,7 @@ setup(
     ext_modules=[
         cpp.CUDAExtension('rotate_compare_cppext',
                           ["_rotate_compare/rotate_compare.cpp", "_rotate_compare/cuda/rotate_compare.cu"],
-                          extra_compile_args={"cxx": ["-O3"], "nvcc": ["-O3"]})
+                          extra_compile_args={"cxx": ["-O3"], "nvcc": ["-O3","-arch=sm_60"]})
     ],
     cmdclass={"build_ext": cpp.BuildExtension}
 )
@@ -42,7 +42,7 @@ setup(
     name='rotate_dist_cppext',
     ext_modules=[
         cpp.CUDAExtension('rotate_dist_cppext', ["_rotate_dist/rotate_dist.cpp", "_rotate_dist/cuda/rotate_dist.cu"],
-                          extra_compile_args={"cxx": ["-O3"], "nvcc": ["-O3"]})
+                          extra_compile_args={"cxx": ["-O3"], "nvcc": ["-O3","-arch=sm_60"]})
     ],
     cmdclass={"build_ext": cpp.BuildExtension}
 )

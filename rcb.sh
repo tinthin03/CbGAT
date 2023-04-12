@@ -1,3 +1,3 @@
 #!/bin/bash
-time1=$(date)
-CUDA_VISIBLE_DEVICES="$@" python -u main.py > trainCbGAT${time1}.out
+time1 = "$(date +%Y-%m-%d-%H%M)"
+CUDA_VISIBLE_DEVICES="$@" nohup python -u main.py > trainEM$time1.out &
