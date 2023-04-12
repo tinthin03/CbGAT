@@ -6,7 +6,7 @@ data_em/
 log/
 #/cppext/
 *.txt
-#*.sh
+*.sh
 *.out
 *.nt
 build/
