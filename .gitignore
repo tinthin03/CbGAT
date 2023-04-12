@@ -1,0 +1,10 @@
+.vscode/
+__pycache__/
+checkpoints/
+/data/
+data_em/
+log/
+*.txt
+#*.sh
+*.out
+*.nt
