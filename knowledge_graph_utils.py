@@ -29,16 +29,33 @@ def load_dataset(DATA_DIR):
     ret = dict()
     ret['E'] = E#实体数
     ret['R'] = R#关系数，包括逆关系
+    ret['T'] = dict()#每个关系对应的tripples数量
+
+    for r_id in range(R):
+        ret['T'][r_id]=0
+
 
     for item in ['train', 'valid', 'test']:
         edges = []
-        with open(f"{DATA_DIR}/{item}.txt") as fin:
-            for line in fin:
-                h, r, t = line.strip().split('\t')
-                h, r, t = entity2id[h], relation2id[r], entity2id[t]
+        if item == 'train':
+            with open(f"{DATA_DIR}/{item}.txt") as fin:
+                for line in fin:
+                    h, r, t = line.strip().split('\t')
+                    h, r, t = entity2id[h], relation2id[r], entity2id[t]
 
-                edges.append([h, r, t])
-                edges.append([t, r + mov, h])
+                    edges.append([h, r, t])
+                    edges.append([t, r + mov, h])
+                    ret['T'][int(r)] += 1
+                    ret['T'][int(r + mov)] += 1
+        else:
+            with open(f"{DATA_DIR}/{item}.txt") as fin:
+                for line in fin:
+                    h, r, t = line.strip().split('\t')
+                    h, r, t = entity2id[h], relation2id[r], entity2id[t]
+
+                    edges.append([h, r, t])
+                    edges.append([t, r + mov, h])
+
         ret[item] = edges
 
     return ret#键值为['train', 'valid', 'test']的字典，每个字典的key是三元组(h,r,t)，及反三元组(t,r+mov,h)=的list。将r加上位移表示其逆关系，用于无向图？

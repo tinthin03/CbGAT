@@ -72,10 +72,10 @@ class EMiner(torch.nn.Module):
 
                 rules = [(r,)]#目标谓词r
                 prior = [0.0, ]
-                rules, scores = self.generator.rule_gen(r,rule_file,self.arg('max_beam_rules'),self.predictor.arg('max_rule_len'))
+                grules, gscores = self.generator.rule_gen(r,rule_file,self.arg('max_beam_rules'),self.predictor.arg('max_rule_len'))
                 i = 0
-                for rule in rules:
-                    score = scores[i].item()
+                for rule in grules:
+                    score = gscores[i].item()
                     i += 1
                     rule = tuple(rule)
                     if rule in sampled:
@@ -1212,15 +1212,17 @@ class CbGATGenerator(torch.nn.Module):
 
                     if path in rule_set:
                         continue
-                    sc = self.cb_rule_score(path)
+                    #print("path",path)
+                    sc = self.cb_rule_score(r,path)
                     rule_set.add(path)
-                    if len(path) <= self.arg('max_rule_len'):
-                        rules.append((path, sc*prec,i))
+                    if len(path) <= max_len:
+                        rules.append((path, sc,i))
                 except:
                     continue
-
+        #print("____len(rules),num_samples____",len(rules),len(rule_set),num_samples) 
+        #print("____rules____",rules)            
         rules = sorted(rules, key=lambda x: (x[1], x[2]), reverse=True)[:num_samples]#利用权重排序rule
-        print(f"Loaded from file: |rules| = {len(rules)} max_rule_len = {max_len}")
+        print(f"Evaluate candidate rules: |rules| = {len(rules)} max_rule_len = {max_len}")
         x = torch.tensor([prec for _, prec, _ in rules]).cuda()
         prior = -torch.log((1 - x.float()).clamp(min=1e-6))#最好是0-1
         # prior = x
@@ -1228,11 +1230,9 @@ class CbGATGenerator(torch.nn.Module):
         
         return rules,prior
     #undireted,等增加CBGAT的有向向量学习
-    def cb_rule_score(self,path):
+    def cb_rule_score(self,target_r,path):
         
-        rule_list = list(path)
-        target_r = rule_list[0]
-        rule_path = rule_list[1:]
+        rule_path = list(path)
         path_emb = torch.zeros(self.r_rmb_len).cuda()
         last_r = -1
         for r in rule_path:
@@ -1253,13 +1253,11 @@ class CbGATGenerator(torch.nn.Module):
             last_r = r
         output = cos(path_emb,self.r_emb[target_r])
         angs = (torch.acos(output)*180/3.1415926).item()
-        print("Score for rule",rule_list," = ",angs)
+        print("Score for rule",rule_path," = ",angs)
         return angs
 
-    def cb_rule_score_directed(self,path):
-        rule_list = list(path)
-        target_r = rule_list[0]
-        rule_path = rule_list[1:]
+    def cb_rule_score_directed(self,target_r,path):
+        rule_path = list(path)
         path_emb = torch.zeros(self.r_rmb_len).cuda()
         last_r = -1
         for r in rule_path:
@@ -1276,7 +1274,7 @@ class CbGATGenerator(torch.nn.Module):
             last_r = r
         output = cos(path_emb,self.r_emb[target_r])
         angs = (torch.acos(output)*180/3.1415926).item()
-        print("Score for rule",rule_list," = ",angs)
+        print("Score for rule",rule_path," = ",angs)
         return angs
 
     def init(self):
