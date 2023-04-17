@@ -268,6 +268,29 @@ class Corpus:
                     graph[source][target].append(value)
         print("multiroute_Graph created")
         return graph
+    def get_path_graph(self):
+        graph = {}
+        all_tiples = torch.cat([self.train_adj_matrix[0].transpose(
+            0, 1), self.train_adj_matrix[1].unsqueeze(1)], dim=1) #转为每行一个三元组的tensor
+
+        for data in all_tiples:
+            source = data[1].data.item()#cols
+            target = data[0].data.item()#rows
+            value = data[2].data.item()#data
+
+            if(source not in graph.keys()):
+                graph[source] = {}
+                if (value not in graph[source].keys()):
+                    graph[source][value] = [target]
+                else:
+                    graph[source][value].append(target)
+            else:
+                if (value not in graph[source].keys()):
+                    graph[source][value] = [target]
+                else:
+                    graph[source][value].append(target)
+        print("Path_Graph created")
+        return graph
     #找出所有跟source相距为nbd_size的node。
     #neighbors返回值是一个字典，键是距离，值是(tuple(relations), tuple(entities[:-1]))，其中relations记录了一个nhop的关系路径，entities记录了对应的节点
     #graph每项表示一个三元组：graph[source][target] = value

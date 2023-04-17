@@ -177,9 +177,9 @@ class SpKBGATModified(nn.Module):#initial_entity_emb、initial_relation_emb决�
         #print("SpKBGATModified__forward__ mask.shape",mask.shape,mask_l.shape)
         #无pretrain：entity_embeddings.shape = [14541, 50] or [237, 50] relation_embeddings.shape = [237, 50] or [14541, 50]
         #pretrain：entity_embeddings.shape = [14541, 100] or [237, 100] relation_embeddings.shape = [237, 100] or [14541, 50]
-        print("SpKBGATModified__forward__self.entity_embeddings.shape,self.relation_embeddings.shape",self.entity_embeddings.shape,self.relation_embeddings.shape)
-        print("SpKBGATModified__forward__out_entity_1.shape",out_entity_1.shape)#[14541, 200] or [237, 200]
-        print("SpKBGATModified__forward__out_entity_l_1.shape",out_entity_l_1.shape)#[200, 272115] or [200, 502958]
+        # print("SpKBGATModified__forward__self.entity_embeddings.shape,self.relation_embeddings.shape",self.entity_embeddings.shape,self.relation_embeddings.shape)
+        # print("SpKBGATModified__forward__out_entity_1.shape",out_entity_1.shape)#[14541, 200] or [237, 200]
+        # print("SpKBGATModified__forward__out_entity_l_1.shape",out_entity_l_1.shape)#[200, 272115] or [200, 502958]
         entities_upgraded = self.entity_embeddings.mm(self.W_entities)#pretrain时：[14541, 100]*[100,200] or [237, 100]*[100,200]
         out_entity_1 = entities_upgraded + \
             mask.unsqueeze(-1).expand_as(out_entity_1) * out_entity_1 #固定为[14541,200]or [237, 200]其中，200为100*2，2头

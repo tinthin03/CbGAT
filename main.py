@@ -280,11 +280,11 @@ def batch_gat_loss(gat_loss_func, train_indices, entity_embed, relation_embed,mo
         neg_triples = train_indices[len_pos_triples:]
     else:
         neg_triples = train_indices[len_pos_triples:]
-    print("pos_triples.shape",pos_triples.shape)
-    print("neg_triples.shape",neg_triples.shape)
+    #print("pos_triples.shape",pos_triples.shape)
+    #print("neg_triples.shape",neg_triples.shape)
 
     pos_triples = pos_triples.repeat(int(args.valid_invalid_ratio_gat), 1)
-    print("pos_triples.shape",pos_triples.shape)#6666
+    #print("pos_triples.shape",pos_triples.shape)#6666
 
     source_embeds = entity_embed[pos_triples[:, 0]]
     relation_embeds = relation_embed[pos_triples[:, 1]]
@@ -301,8 +301,8 @@ def batch_gat_loss(gat_loss_func, train_indices, entity_embed, relation_embed,mo
     neg_norm = torch.norm(x, p=1, dim=1)
 
     y = -torch.ones(int(args.valid_invalid_ratio_gat) * len_pos_triples).cuda()
-    print("pos_norm.shape",pos_norm.shape)#6666
-    print("neg_norm.shape",neg_norm.shape)#
+    # print("pos_norm.shape",pos_norm.shape)#6666
+    # print("neg_norm.shape",neg_norm.shape)#
 
     loss = gat_loss_func(pos_norm, neg_norm, y)
     return loss

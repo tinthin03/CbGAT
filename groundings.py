@@ -1,5 +1,54 @@
 import groundings_cppext as cppgnd
 import torch
+from att import *
+
+def init_groundings():#来自文件，需要与use_graph的数据集保持一致
+    file = args.data + "/cb_Corpus_graph.pickle"
+    if not os.path.exists(file):
+        cb_kg = cb_Corpus_.get_multiroute_graph()
+        file = args.data + "/cb_Corpus_graph.pickle"
+        with open(file, 'wb') as handle:
+            pickle.dump(cb_kg, handle,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+        kg = Corpus_.get_multiroute_graph()
+        file = args.data + "/Corpus_graph.pickle"
+        with open(file, 'wb') as handle:
+            pickle.dump(kg, handle,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+    else:
+        print("Loading Generated graph  >>>")
+        cb_kg = pickle.load(open(args.data + "/cb_Corpus_graph.pickle",'rb'))
+        kg = pickle.load(open(args.data + "/Corpus_graph.pickle",'rb'))
+
+    file = args.data +"/groundings.pickle"#ground[head][path]={grounding:count,...}
+    if not os.path.exists(file):
+        ground = dict()
+        for e in range(len(Corpus_.entity2id)):
+            ground[e]=dict()
+        for h,t_dict in kg.items():
+            for t,r_list in t_dict.items():
+                for r in r_list:
+                    key = str(r)
+                    if key in ground[h].keys():
+                        if t not in ground[h][key].keys():
+                            ground[h][key][t] = 1
+                        else:
+                            ground[h][key][t] += 1
+                    else:
+                        ground[h][key] = {t:1}
+        with open(file, 'wb') as handle:
+            pickle.dump(ground, handle,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+    else:
+        print("Loading Generated groundings  >>>")
+        ground = pickle.load(open(file,'rb'))
+    return ground
+
+def update_groundings(new_ground):
+    file = args.data +"/groundings.pickle"#ground[head][path]=[grounding_list]
+    with open(file, 'wb') as handle:
+        pickle.dump(new_ground, handle,
+                    protocol=pickle.HIGHEST_PROTOCOL)
 
 #调用Groundings.cpp里的graph对象，形成e[h][r].push_back(t),a[h].push_back({r, t})两个数组表示知识，存入G.e,G.a
 def use_graph(g):

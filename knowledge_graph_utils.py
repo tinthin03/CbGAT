@@ -30,9 +30,13 @@ def load_dataset(DATA_DIR):
     ret['E'] = E#实体数
     ret['R'] = R#关系数，包括逆关系
     ret['T'] = dict()#每个关系对应的tripples数量
+    ret['Rh']= dict()#每个关系对应的head
+    ret['Rt']= dict()#每个关系对应的tail
 
     for r_id in range(R):
         ret['T'][r_id]=0
+        ret['Rh'][r_id]=set()
+        ret['Rt'][r_id]=set()
 
 
     for item in ['train', 'valid', 'test']:
@@ -47,6 +51,10 @@ def load_dataset(DATA_DIR):
                     edges.append([t, r + mov, h])
                     ret['T'][int(r)] += 1
                     ret['T'][int(r + mov)] += 1
+                    ret['Rh'][int(r)].add(h)
+                    ret['Rt'][int(r)].add(t)
+                    ret['Rh'][int(r + mov)].add(t)
+                    ret['Rt'][int(r + mov)].add(h)
         else:
             with open(f"{DATA_DIR}/{item}.txt") as fin:
                 for line in fin:
@@ -55,6 +63,10 @@ def load_dataset(DATA_DIR):
 
                     edges.append([h, r, t])
                     edges.append([t, r + mov, h])
+                    ret['Rh'][int(r)].add(h)
+                    ret['Rt'][int(r)].add(t)
+                    ret['Rh'][int(r + mov)].add(t)
+                    ret['Rt'][int(r + mov)].add(h)
 
         ret[item] = edges
 
