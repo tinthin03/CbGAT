@@ -34,7 +34,7 @@ def read_relation_from_id(filename='./data/WN18RR/relation2id.txt'):
     return relation2id
 
 
-def init_embeddings(entity_file, relation_file):
+def init_embeddings(entity_file, relation_file,inv):
     entity_emb, relation_emb = [], []
 
     with open(entity_file) as f:
@@ -44,9 +44,10 @@ def init_embeddings(entity_file, relation_file):
     with open(relation_file) as f:
         for line in f:
             relation_emb.append([float(val) for val in line.strip().split()])
-    with open(relation_file) as f:
-        for line in f:
-            relation_emb.append([float(val)*-1 for val in line.strip().split()])
+    if inv:
+        with open(relation_file) as f:
+            for line in f:
+                relation_emb.append([float(val)*-1 for val in line.strip().split()])
 
     return np.array(entity_emb, dtype=np.float32), np.array(relation_emb, dtype=np.float32)
 

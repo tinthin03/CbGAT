@@ -177,10 +177,10 @@ def load_data(args):
     #     pickle.dump(load_data_pickle, handle,
     #                 protocol=pickle.HIGHEST_PROTOCOL)
     # unique_cb_entities = unique_cb_entities_train
-
+    #Rnum = len(relation2id)
     if args.pretrained_emb:#vec文件固定为100维
         entity_embeddings, relation_embeddings = init_embeddings(os.path.join(args.data, 'entity2vec.txt'),
-                                                                 os.path.join(args.data, 'relation2vec.txt'))
+                                                                 os.path.join(args.data, 'relation2vec.txt'),inv = inv_relatation)
         print("Initialised relations and entities from TransE")
 
     else:# args.embedding_size 默认为50维
