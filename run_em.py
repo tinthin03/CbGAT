@@ -46,7 +46,7 @@ hyperparams          =  {
 if len(sys.argv) > 7:
     hyperparams = dict(sys.argv[7])
 
-
+DATA_DIR          = "./data/FB15k-237" 
 '''
 Example:
 The script will train a separate model for each relation in range(start, total number of relations, hop).
@@ -71,12 +71,12 @@ def new_print(*args, **kwargs):
 print = new_print
 
 # Step 0: Install dependencies
-os.chdir('./cppext')
-os.popen('python setup.py install')
-os.chdir('..')
+# os.chdir('./cppext')
+# os.popen('python setup.py install')
+# os.chdir('..')
 
 # Step 1: Load dataset
-dataset = load_dataset(f"{DATA_EM_DIR}")#键值为['train', 'valid', 'test']的字典，每个字典的key是三元组(h,r,t)，及反三元组(t,r+mov,h)=的list
+dataset = load_dataset(f"{DATA_DIR}")#键值为['train', 'valid', 'test']的字典，每个字典的key是三元组(h,r,t)，及反三元组(t,r+mov,h)=的list
 
 # Step 2: Generate rules
 # Note: This step only needs to do once.

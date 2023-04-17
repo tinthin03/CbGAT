@@ -1279,7 +1279,7 @@ class CbGATGenerator(torch.nn.Module):
                     continue#去掉rulefile里的逆关系规则
                 #print("path",path)
                 print("Calc score for rule:",path)
-                sc = self.cb_rule_score(r,path)
+                sc = self.cb_rule_score_gnd(r,path)
                 print("Score  = ",sc)
                 rule_set.add(path)
                 if len(path) <= max_len:
@@ -1354,7 +1354,7 @@ class CbGATGenerator(torch.nn.Module):
         print("Score for rule",rule_path," = ",angs)
         return angs
 
-    def h_path_t(h_list,path):#返回{t:count}
+    def h_path_t(self,h_list,path):#返回{t:count}
         gnd = dict()
         for h in h_list:
             hgnd = calc_groundings(h, path,count=True)
@@ -1365,14 +1365,14 @@ class CbGATGenerator(torch.nn.Module):
                     gnd[key] = value
         return gnd
     def r_dist_path(self,last_r,r,gnd): #gnd中的t即为last_r,r之间的cb_relation
-        e_list = self.cb_kg[last_r][r]
-        for t in gnd.keys():
-            if t not in e_list:
-                print("Error gnd for last_rel & rel",last_r,r)
-        wt = torch.tensor(gnd.values()).float()
-        wt_norm = torch.nn.functional.normalize(wt,p=1,dim=0)  
+        # e_list = self.cb_kg[last_r][r]
+        # for t in gnd.keys():
+        #     if t not in e_list:
+        #         print("Error gnd for last_rel & rel",last_r,r)
+        wt = torch.tensor(list(gnd.values())).float()
+        wt_norm = torch.nn.functional.normalize(wt,p=1,dim=0).cuda()  
         #print(mid_e.shape)
-        mid_e_emd = self.cb_r_emb[gnd.keys(),:]
+        mid_e_emd = self.cb_r_emb[list(gnd.keys()),:].cuda()
         mean_mid_e_emd = mid_e_emd*wt_norm.unsqueeze(-1)
         r_dist = mean_mid_e_emd.sum(dim=0)
         #print(mid_e_emd.shape)

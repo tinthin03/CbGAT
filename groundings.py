@@ -70,7 +70,7 @@ def groundings(h, rule, count=False):
         key = cppgnd.result_pts()
         val = cppgnd.result_cnt()
         # return list(zip(key, val))
-        print("groundings out")
+        #print("groundings out")
         return {k: v for k, v in zip(key, val)}
     else:
         cppgnd.calc(h, rule)

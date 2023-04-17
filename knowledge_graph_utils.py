@@ -7,16 +7,16 @@ def load_dataset(DATA_DIR):
     entity2id = dict()
     relation2id = dict()
 
-    with open(f'{DATA_DIR}/entities.dict') as fin:
+    with open(f'{DATA_DIR}/entity2id.txt') as fin:
         entity2id = dict()
         for line in fin:
-            eid, entity = line.strip().split('\t')
+            entity,eid = line.strip().split('\t')
             entity2id[entity] = int(eid)
 
-    with open(f'{DATA_DIR}/relations.dict') as fin:
+    with open(f'{DATA_DIR}/relation2id.txt') as fin:
         relation2id = dict()
         for line in fin:
-            rid, relation = line.strip().split('\t')
+            relation,rid = line.strip().split('\t')
             relation2id[relation] = int(rid)
 
     E = len(entity2id)
@@ -63,10 +63,10 @@ def load_dataset(DATA_DIR):
 
                     edges.append([h, r, t])
                     edges.append([t, r + mov, h])
-                    ret['Rh'][int(r)].add(h)
-                    ret['Rt'][int(r)].add(t)
-                    ret['Rh'][int(r + mov)].add(t)
-                    ret['Rt'][int(r + mov)].add(h)
+                    # ret['Rh'][int(r)].add(h)
+                    # ret['Rt'][int(r)].add(t)
+                    # ret['Rh'][int(r + mov)].add(t)
+                    # ret['Rt'][int(r + mov)].add(h)
 
         ret[item] = edges
 
