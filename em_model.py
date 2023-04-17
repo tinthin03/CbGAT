@@ -1431,6 +1431,23 @@ class CbGATGenerator(torch.nn.Module):
             self.cb_kg = pickle.load(open(args.data + "/cb_Corpus_graph.pickle",'rb'))
             self.kg = pickle.load(open(args.data + "/Corpus_graph.pickle",'rb'))
 
+        file = args.data + "/cb_path_graph.pickle"
+        if not os.path.exists(file):
+            self.cb_path_kg = cb_Corpus_.get_path_graph()
+            file = args.data + "/cb_path_graph.pickle"
+            with open(file, 'wb') as handle:
+                pickle.dump(self.cb_path_kg, handle,
+                            protocol=pickle.HIGHEST_PROTOCOL)
+            self.path_kg = Corpus_.get_path_graph()
+            file = args.data + "/path_graph.pickle"
+            with open(file, 'wb') as handle:
+                pickle.dump(self.path_kg, handle,
+                            protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            print("Loading Generated path_graph  >>>")
+            self.cb_path_kg = pickle.load(open(args.data + "/cb_path_graph.pickle",'rb'))
+            self.path_kg = pickle.load(open(args.data + "/path_graph.pickle",'rb'))
+
         file = args.data + "/r_dist_undirected.pickle"
         if not os.path.exists(file):
             self.r_dist = self.patch_r_dist(r_num = 2*self.R)

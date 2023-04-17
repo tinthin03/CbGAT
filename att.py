@@ -231,6 +231,22 @@ def ShortestPath(args):
         print("Loading Generated graph  >>>")
         cb_kg = pickle.load(open(args.data + "/cb_Corpus_graph.pickle",'rb'))
         kg = pickle.load(open(args.data + "/Corpus_graph.pickle",'rb'))
+    file = args.data + "/cb_path_graph.pickle"
+    if not os.path.exists(file):
+        cb_path_kg = cb_Corpus_.get_path_graph()
+        file = args.data + "/cb_path_graph.pickle"
+        with open(file, 'wb') as handle:
+            pickle.dump(cb_path_kg, handle,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+        path_kg = Corpus_.get_path_graph()
+        file = args.data + "/path_graph.pickle"
+        with open(file, 'wb') as handle:
+            pickle.dump(path_kg, handle,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+    else:
+        print("Loading Generated path_graph  >>>")
+        cb_path_kg = pickle.load(open(args.data + "/cb_path_graph.pickle",'rb'))
+        path_kg = pickle.load(open(args.data + "/path_graph.pickle",'rb'))
     #print(kg[700])
     #print(kg[701])
     #print(cb_kg[66])
