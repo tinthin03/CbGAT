@@ -45,6 +45,7 @@ class EMiner(torch.nn.Module):
         self.R = dataset['R']
         assert self.R % 2 == 0
         args = self.set_args(args)
+        self.result = []
 
         self.dataset = dataset
         self._print = print
@@ -103,15 +104,16 @@ class EMiner(torch.nn.Module):
                 i = 0
                 for rule in grules:
                     score = gscores[i].item()
-                    i += 1
                     rule = tuple(rule)
                     if rule in sampled:
+                        i += 1
                         continue
                     sampled.add(rule)
                     rules.append(rule)
                     prior.append(score)
                     if len(sampled) % self.arg('sample_print_epoch') == 0 or len(sampled) < 20:
-                        print(f"sampled # = {len(sampled)} rule = {rule} prior-score = {score}")
+                        print(f"sampled # = {len(sampled)} rule = {rule} prior-score = {score} prec={self.generator.prec[i]}")
+                    i += 1
 
                 print(f"Done |sampled| = {len(sampled)}")
 
@@ -119,27 +121,32 @@ class EMiner(torch.nn.Module):
                 # prior -= prior.max()
                 # prior = prior.exp()
 
-                self.predictor.relation_init(r, rules=rules, prior=prior)#对每个新的EM epoch，初始化评估器，但不再使用rule_file
-
+                self.predictor.relation_init(r, rules=rules,path_gnd = self.generator.path_gnd,prec = self.generator.prec, prior=prior)#对每个新的EM epoch，初始化评估器，但不再使用rule_file
+                self.generator.path_gnd = self.predictor.path_gnd
+                self.generator.prec = self.predictor.prec
+                self.generator.rules_path = self.predictor.rules_exp#经历过一次筛选的（可能是predictor，也可能直接用生成器的prior）
 
         for self.em in range(num_em_epoch):
             self.predictor = self.predictor_init()
             self.predictor.pgnd_buffer = pgnd_buffer
             self.predictor.rgnd_buffer = rgnd_buffer
             self.predictor.rgnd_buffer_test = rgnd_buffer_test
+            self.predictor.em = self.em
 
+            self.generator.r = self.r
             
-            generate_rules()#生成当前目标谓词r的rule并初始化评估器
+            
+            generate_rules()#生成当前目标谓词r的rule并初始化评估器（规则经历两次筛选，第一次生成器，第二次根据参数决定，直接用生成器的prior或使用predictor）
 
             # E-Step:
             print("Train/test Evaluator(E_step).")
-            valid, test,ret_loss = self.predictor.train_model()#执行规则评估器的训练，设置了self.training为真
+            valid, test,ret_loss,ret_loss_rule = self.predictor.train_model()#执行规则评估器的训练，设置了self.training为真
 
             # M-Step
             #gen_batch = self.predictor.make_gen_batch()#用当前评估器模型生成规则数据作为rnn生成器的训练数据集，包括input（目标谓词和占位词序列），target（规则序列），weight，对应规则序列的权重
-            if self.em>1:
+            if self.em>1:#TODO
                 print("Train generator(M_step).")
-                self.generator.train_model(ret_loss,
+                self.generator.train_model(r,ret_loss,ret_loss_rule,
                                         em_epoch=self.em,num_em_epoch = num_em_epoch)
 
             ckpt = {
@@ -157,8 +164,10 @@ class EMiner(torch.nn.Module):
 
         # Testing
         self.em = num_em_epoch
+        self.predictor.em = self.em
         generate_rules()
-        valid, test,ret_loss = self.predictor.train_model()
+        valid, test,ret_loss,ret_loss_rule = self.predictor.train_model()
+        self.result = self.predictor.result_sum[-1]
         groundings.update_groundings(session_groundings)
         gc.collect()
         return valid, test
@@ -176,8 +185,8 @@ class EMiner(torch.nn.Module):
         self._args_init = args
         self._args = dict()
         def_args = dict()
-        def_args['num_em_epoch'] = 5
-        def_args['sample_print_epoch'] = 100
+        def_args['num_em_epoch'] = 10
+        def_args['sample_print_epoch'] = 20
         def_args['max_beam_rules'] = 3000#生成器生成或rulefile筛选的规则总数
         def_args['generator_embed_dim'] = 512
         def_args['generator_hidden_dim'] = 256
@@ -233,6 +242,8 @@ class Evaluator(ReasoningModel):
         self.print = print
         self.debug = False
         self.recording = False
+        self.em = 0
+        self.result_sum = []#[[0.0,0,0,0,0]]
 
     def train(self, mode=True):
         self.training = mode
@@ -263,11 +274,12 @@ class Evaluator(ReasoningModel):
         relation_embed = self.rotate._attatch_empty_relation()
         rule_embed = torch.zeros(self.num_rule, self.rotate.embed_dim).cuda()
         for i in range(self.MAX_RULE_LEN):
-            rule_embed += self.index_select(relation_embed, self.rules[i])
-        return rule_embed
+            rule_embed += self.index_select(relation_embed, self.rules[i])#self.rules是规则序号的转置，第i列代表第所有规则的第i个谓词关系
+        return rule_embed#shape = (self.num_rule, self.rotate.embed_dim)
 
     # Init rules#规则的预处理操作,包括设置当前评估器的（候选）规则，生成padding等
-    #将num_rules置为rules的长度
+    #将num_rules置为rules的长度,
+    #每epoch的relation_init中调用，最多生成max_beam_rules个rules
     def set_rules(self, rules):
         paths = rules
         r = self.r
@@ -284,6 +296,7 @@ class Evaluator(ReasoningModel):
         rules = []
         rules_gen = []
         rules_exp = []
+        #self.rules_path = rules
 
         for path in paths:
             npad = (self.MAX_RULE_LEN - len(path))
@@ -347,7 +360,7 @@ class Evaluator(ReasoningModel):
     # 在运行过程中rule_embed代表的规则可能来自本轮生成器的生成，crule、centity代表的pgnd是当前评估器已存的规则（上一轮的规则），所以这两者的不同即为评估器的反馈 
     def cscore(self, rule_embed, crule, centity, cweight):
         # 针对当前三元组，batch中包含当前评估器下各个规则判断的每个tail实体（即pgnd的数量，等于 crule, centity的长度），这些对tail的判断存于centity，对应的规则存于crule
-        # 本函数比较rule_embed（根据生成器给出规则结算得到的hOr），以及评估器中的pgnd的实体（t）对应的欧式距离相似度（用于判断哪些是tail），返回一个长度为pgnd的数量的数组
+        # 本函数比较rule_embed（根据生成器给出规则结算得到的hOr,长度为num_rules等规则数量，为规则向量词典，不是pgnd数量），以及评估器中的pgnd的实体（t）对应的欧式距离相似度（用于判断哪些是tail），返回一个长度为pgnd的数量的数组
         # 其中生成器给出规则的hOr由crule索引，评估器中的pgnd的实体（t）由centity索引
         score = self.rotate.compare(rule_embed, self.rotate.entity_embed, crule, centity)
         score = (self.rotate.gamma - score).sigmoid()
@@ -446,7 +459,7 @@ class Evaluator(ReasoningModel):
     # batch格式：h, t_list, list2mask(answer, self.E), crule, centity, cweight
     # 其中t_list为train集的tail实体，centity给出评估器当前规则下的rotateE算法选择的tail，以及grounding的tail
     #init_weight_with_prior默认为false，此时，每个epoch都会调用make_batch()来生成上述的batch，以更新评估器当前规则。
-    def relation_init(self, r=None, rule_file=None, rules=None, prior=None, force_init_weight=False):
+    def relation_init(self, r=None, rule_file=None,path_gnd = [],prec = [], rules=None, prior=None, force_init_weight=False):
         print = self.print
         if r is not None:
             self.r = r
@@ -495,7 +508,9 @@ class Evaluator(ReasoningModel):
 
         self.prior = prior#rule_sample给出的规则的初始权重，或者上一轮的生成器给出的规则权重
         self.set_rules(rules)#规则的预处理操作，设置评估器当前的规则为rules，生成padding等。此时即将self.rule_exp置为上一轮生成器产出
-        print("Generator exctract max_beam_rules/num_rule.")
+        self.path_gnd = path_gnd
+        self.prec = prec
+        print("Generator exctract max_beam_rules/num_rule.|rules|:",self.num_rule)
         num_rule = self.num_rule#已由self.set_rules函数置为生成器或者rulefile给出的规则数（默认为3000）,规则按照prior排序
         with torch.no_grad():
             self.tmp__rule_value = torch.zeros(num_rule).cuda()
@@ -549,13 +564,16 @@ class Evaluator(ReasoningModel):
             self.rules = self.rules[:, cho]
             self.rules_gen = self.rules_gen[cho]#
             self.rules_exp = [self.rules_exp[x] for x in cho_list]#self.rules_exp里的规则，按value顺序重新排列，筛选max_rules个
-
+            #print("len(self.path_gnd),len(cho_list)",len(self.path_gnd),len(cho_list))
+            if len(self.path_gnd)>0:
+                self.path_gnd = [self.path_gnd[x] for x in cho_list]
+                self.prec  = [self.prec[x] for x in cho_list]
         if init_weight:#init_weight_with_prior默认为false时，weight为tmp__rule_value
             weight = self.tmp__rule_value+self.prior*1000
         else:
             weight = self.prior#init_weight_with_prior设为true时，self.tmp__rule_value 一直为0，模型只接受prior为权重
 
-        print(f"weight_init: num = {self.num_rule} [{weight.min().item()}, {weight.max().item()}]")
+        print(f"weight_init: Aft choose,|rules| = {self.num_rule} [{weight.min().item()}, {weight.max().item()}]")
         weight = weight.clamp(min=0.0001)
         weight /= weight.max()
         weight[0] = 1.0
@@ -641,13 +659,13 @@ class Evaluator(ReasoningModel):
     def rule_weight(self):
         return self.rule_weight_raw
 
-    def forward(self, batch):
+    def forward(self, batch,individual_rule = True):
 
         E = self.E
         R = self.R
 
         rule_weight = self.rule_weight
-        _rule_embed = self.rule_embed()
+        _rule_embed = self.rule_embed()#shape = (self.num_rule, self.rotate.embed_dim)
         rule_embed = []
         crule = []
         crule_weight = []
@@ -660,14 +678,14 @@ class Evaluator(ReasoningModel):
             #crule是一个数组，长度为 r的各个规则当前推理的pgnd的数量，值是规则在集合里的序号。_centity, _cweight形状相同
             _h, _, _, _crule, _centity, _cweight = self.load_batch(single)
             if _crule.size(0) == 0:
-                csplit.append(csplit[-1])#空样本置0，这样的样本的head没有任何规则可推导出pgnd
+                csplit.append(csplit[-1])#空样本置跟上一个同样的值，这样的样本的head没有任何规则可推导出pgnd
                 continue
             crule.append(_crule + len(rule_embed) * self.num_rule)#规则序号的编码，每batch里涉及的规则共self.num_rule个，因此下一行的序号增加行数*self.num_rule
-            crule_weight.append(rule_weight.index_select(0, _crule))
+            crule_weight.append(rule_weight.index_select(0, _crule))#len=pgnd
             centity.append(_centity)
             cweight.append(_cweight)
-            rule_embed.append(self.rotate.embed(_h, _rule_embed))#hOt
-            csplit.append(csplit[-1] + _crule.size(-1))#规则序列里的占位分离符
+            rule_embed.append(self.rotate.embed(_h, _rule_embed))#hOr，代表num_rule个规则在rotatE模型下，对tail的表征的推理 ,(self.num_rule, self.rotate.embed_dim)
+            csplit.append(csplit[-1] + _crule.size(-1))#规则序列里的占位分离符，记录该样本的pgnd的序号
 
 
         if len(crule) == 0:
@@ -677,18 +695,18 @@ class Evaluator(ReasoningModel):
             cweight = torch.tensor([]).cuda()
             rule_embed = torch.tensor([]).cuda()
             cscore = torch.tensor([]).cuda()
+            cscore_drule = torch.tensor([]).cuda()
         else:
-            crule = torch.cat(crule, dim=0)#合并所有样本的pgnd。
-            crule_weight = torch.cat(crule_weight, dim=0)
-            centity = torch.cat(centity, dim=0)
+            crule = torch.cat(crule, dim=0)#合并所有样本的pgnd。其中规则的序号为原始规则序号+偏移，偏移==样本序号*self.num_rule
+            crule_weight = torch.cat(crule_weight, dim=0)#规则权重
+            centity = torch.cat(centity, dim=0)#所有样本的pgnd
             cweight = torch.cat(cweight, dim=0)
-            rule_embed = torch.cat(rule_embed, dim=0)
-            cscore = self.cscore(rule_embed, crule, centity, cweight) * crule_weight#所有样本的pgnd，都按评估器的评分算法打分,并以规则的分数加权，此分数不涉及答案t_list。
-
-
-
+            rule_embed = torch.cat(rule_embed, dim=0)#每个样本里num_rule个规则的推理结果hOr的叠加，len = self.num_rule*tripple样本数
+            cscore_drule = self.cscore(rule_embed, crule, centity, cweight)#用于统计单rule的质量，规则序号crule经过偏移后跟rule_embed的序号正好对应，len = pgnd总量
+            cscore = cscore_drule * crule_weight#所有样本的pgnd，都按评估器的评分算法打分,并以规则的分数加权，此分数不涉及答案t_list。len = pgnd总量
 
         loss = torch.tensor(0.0).cuda().requires_grad_() + 0.0
+        loss_rule = torch.zeros(self.num_rule).cuda() + 0.0
         result = []
 
         for i, single in enumerate(batch):#再遍历一遍三元组
@@ -696,19 +714,41 @@ class Evaluator(ReasoningModel):
             _h, t_list, mask, _crule, _centity, _cweight = self.load_batch(single)
             if _crule.size(0) != 0:#head有规则可达pgnd
                 crange = torch.arange(csplit[i], csplit[i + 1]).cuda()#截取某个样本对应的pgnd数据
-                score = torch.sparse.sum(torch.sparse.FloatTensor(
+                sparse_score = torch.sparse.FloatTensor(
                     torch.stack([_centity, _crule], dim=0),
                     self.index_select(cscore, crange),
                     torch.Size([E, self.num_rule])
-                ), -1).to_dense()#计算评估器基于该样本的规则和pgnd，对全部E个实体的打分
+                )
+                score = torch.sparse.sum(sparse_score, -1).to_dense()#计算评估器基于该样本的规则和pgnd，对全部E个实体的打分;shape = (E,1)
+                if individual_rule:
+                    score_rule = torch.sparse.FloatTensor(
+                    torch.stack([_centity, _crule], dim=0),
+                    self.index_select(cscore_drule, crange),
+                    torch.Size([E, self.num_rule])).to_dense()#shape = (E,num_rule)
             else:#head无规则可达pgnd，可能是KG上的末梢节点
                 score = torch.zeros(self.E).cuda()
                 score.requires_grad_()
+                if individual_rule:
+                    score_rule = torch.zeros(self.E,self.num_rule).cuda()
+                    #score_rule.requires_grad_()
 
             ans_can = self.arg('answer_candidates', apply=lambda x: x)
             if ans_can is not None:#手动指定了answer，则加入t_list。一般是valid、test时用
                 ans_can = ans_can.cuda()
                 score = self.index_select(score, ans_can)
+                
+                if individual_rule:
+                    #score_rule = score_rule.index_select(0, ans_can)
+                    #score_rule = self.index_select(score_rule, ans_can)
+
+                    if self.training:
+                        if not isinstance(ans_can, torch.Tensor):
+                            ans_can = torch.tensor(ans_can)
+                        ans_can = ans_can.to(score_rule.device)
+                        score_rule = score_rule.index_select(0, ans_can)
+                    else:
+                        score_rule = score_rule[ans_can]
+
                 mask = self.index_select(mask, ans_can)
 
                 map_arr = -torch.ones(self.E).long().cuda()
@@ -716,6 +756,7 @@ class Evaluator(ReasoningModel):
                 map_arr = map_arr.detach().cpu().numpy().tolist()
                 map_fn = lambda x: map_arr[x]
                 t_list = list(map(map_fn, t_list))
+                #根据ans_can的赋值（一个表示tail答案的一维tensor）,改变t_list的值：ans_can里出现的实体为0，其他的为-1。同时从score中筛选相应的答案的得分，筛选相应的mask
 
             if self.recording:
                 self.record.append((score.cpu(), mask, t_list))
@@ -727,8 +768,8 @@ class Evaluator(ReasoningModel):
             if score.dim() == 0:
                 continue
 
-            score = score.softmax(dim=-1)#归一化得分
-            neg = score.masked_select(~mask.bool())#所有错误预测的score直接加和作为loss
+            score = score.softmax(dim=-1)#归一化得分,shape = (E,1)
+            neg = score.masked_select(~mask.bool())#所有错误预测的score直接加和作为loss;shape = (E,1)
 
             loss += neg.sum()
 
@@ -736,8 +777,38 @@ class Evaluator(ReasoningModel):
                 s = score[t]
                 wrong = (neg > s)
                 loss += ((neg - s) * wrong).sum() / wrong.sum().clamp(min=1)
+            
+            if individual_rule:
 
-        return loss / len(batch), self.metrics.summary(result)
+                with torch.no_grad():
+
+                    sc_rule = score_rule.softmax(dim=0)#shape = (E,num_rule)
+                    mask_rule = mask.unsqueeze(-1).repeat(1,self.num_rule)
+                    #print(mask_rule,mask_rule.shape)
+                    #ng_rule = sc_rule.masked_select(~mask_rule.bool())
+                    ng_rule = (sc_rule*~mask_rule)
+                    #print("ng_rule",ng_rule,ng_rule.shape)
+                    loss_rule +=ng_rule.sum(0)
+                    #print("loss_rule",loss_rule)
+
+
+                    for t in t_list:
+                        #s_rule = sc_rule[t]
+                        #print(s_rule)
+                        #wrong_rule = (ng_rule > sc_rule[t])
+                        ls_ng =((ng_rule - sc_rule[t]) * (ng_rule > sc_rule[t])).sum(0) 
+                        ls_f =  (ng_rule > sc_rule[t]).sum(0).clamp(min=1)
+                        # print(wrong_rule)
+                        # print(ng_rule - s_rule)
+                        # print(((ng_rule - s_rule) * wrong_rule).sum(0))
+                        # print(wrong_rule.sum(0))
+                        loss_rule += ls_ng / ls_f#考虑不除以wrong_rule.sum(0)
+                    # ls_ng =((ng_rule - sc_rule[t_list[0]]) * (ng_rule > sc_rule[t_list[0]])).sum(0) 
+                    # ls_f =  (ng_rule > sc_rule[t_list[0]]).sum(0).clamp(min=1)
+                    # loss_rule += ls_ng / ls_f
+                    #print("total loss_rule",loss_rule)
+        #loss_rule.shape = (self.num_rule)
+        return loss / len(batch),loss_rule/len(batch), self.metrics.summary(result)
 
     def _evaluate(self, valid_batch, batch_size=None):
         model = self
@@ -750,7 +821,7 @@ class Evaluator(ReasoningModel):
         with torch.no_grad():
             result = Metrics.zero_value()
             for i in range(0, len(valid_batch), batch_size):#每4个batch进行一个valid
-                cur = model(valid_batch[i: i + batch_size])[1]
+                cur = model(valid_batch[i: i + batch_size])[2]
                 result = Metrics.merge(result, cur)
                 if i % print_epoch == 0 and i > 0:
                     print(f"eval #{i}/{len(valid_batch)}")
@@ -959,12 +1030,12 @@ class Evaluator(ReasoningModel):
 
         def train_step(batch):
             self.train()
-            loss, _ = self(batch)
+            loss,loss_rule, _ = self(batch)
             opt.zero_grad()
             loss.backward()
             opt.step()
             sch.step()
-            return loss
+            return loss,loss_rule
 
         def metrics_score(result):
             result = Metrics.pretty(result)
@@ -1005,16 +1076,21 @@ class Evaluator(ReasoningModel):
 
         relation_embed_init = self.rotate.relation_embed.clone()
         ret_loss = 0
+        ret_loss_rule = torch.zeros(self.num_rule).cuda() + 0.0
         if len(train_batch) == 0:
+            num_epoch = 0
+        if self.em == 0:#TODO 第一epoch，不进行训练。
             num_epoch = 0
         for epoch in range(1, num_epoch + 1):
             if epoch % max(1, len(train_batch) // batch_size) == 0:
                 from random import shuffle
                 shuffle(train_batch)
             batch = [train_batch[(epoch * batch_size + i) % len(train_batch)] for i in range(batch_size)]
-            loss = train_step(batch)
+            #print("len(batch)",len(batch))
+            loss,loss_rule = train_step(batch)
             cum_loss += loss.item()
             ret_loss += loss.item()
+            ret_loss_rule += loss_rule
 
             if epoch % print_epoch == 0:#每print_epoch个步骤打印一次train_predictor训练信息
                 lr_str = "%.2e" % (opt.param_groups[0]['lr'])
@@ -1032,6 +1108,7 @@ class Evaluator(ReasoningModel):
                     break
         if num_epoch>0:
             ret_loss = ret_loss/num_epoch
+            ret_loss_rule = ret_loss_rule/num_epoch
         else:
             ret_loss = 0
 
@@ -1054,8 +1131,10 @@ class Evaluator(ReasoningModel):
         #best[0]存放取得best结果时的样本序号。
         print("__V__\t" + ("\t".join([str(self.r), str(int(best[0]))] + list(map(lambda x: "%.4lf" % x, best[1:])))))
         print("__T__\t" + ("\t".join([str(self.r), str(int(test[0]))] + list(map(lambda x: "%.4lf" % x, test[1:])))))
-
-        return best, test,ret_loss
+        #test[0]为该轮中所有的t_list之和，后面依次为mrr,mr,h1,h3,h10
+        if self.em>0:
+            self.result_sum.append(test)
+        return best, test,ret_loss,ret_loss_rule
 
 
 class CbGATGenerator(torch.nn.Module):
@@ -1071,12 +1150,14 @@ class CbGATGenerator(torch.nn.Module):
         self.padding_idx = self.num_relations + 1
         self.num_layers = 1
         self.use_cuda = True
+        self.r = -1
         self.Rh = Rh#(r,h_set())
         self.Rt = Rt#(r,t_set())
         #self.session_groundings = groundings
-        self.print = print
-
+        self.rules_path = []
+        self.path_gnd = []#路径gndlist，形式为[[{h:count,...},{gnd:count,...},...{t:count,...}],...]
         #self.embedding = torch.nn.Embedding(self.vocab_size, self.embedding_dim, padding_idx=self.padding_idx)
+        self.prec = []
         
         self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
@@ -1108,7 +1189,9 @@ class CbGATGenerator(torch.nn.Module):
         
     
     #根据评估器返回的权重，训练一个由目标谓词生成规则序列的RNN
-    def train_model(self, ret_loss,em_epoch = 1,num_epoch=1, num_em_epoch=100):
+    #ret_loss_rule.shape = (num_rules,1);self.rules_path是长度num_rules的list，每个元素是一个规则path组成的tuple，可转为二维list
+    #self.path_gnd：路径gndlist，形式为[[{h:count,...},{gnd:count,...},...{t:count,...}],...]
+    def train_model(self,r, ret_loss,ret_loss_rule,em_epoch = 1,num_epoch=1, num_em_epoch=100):
         print = self.print
         #opt = torch.optim.Adam(self.parameters(), lr=lr)
         #sch = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=num_epoch, eta_min=lr / 10)
@@ -1146,13 +1229,64 @@ class CbGATGenerator(torch.nn.Module):
         else:
             current_batch_2hop_indices = Variable(
                 torch.LongTensor(current_batch_2hop_indices))
+        #ret_loss_rule.shape = (num_rules,1);self.rules_path是长度num_rules的list，每个元素是一个规则path组成的tuple，可转为二维list
+        #self.path_gnd：路径gndlist，形式为[[{h:count,...},{gnd:count,...},...{t:count,...}],...]    
+        def rule_loss(ret_loss_rule,rule_path,path_gnd,metric_final = True):
+            num_rule = len(rule_path)
+            if metric_final:#TODO 是否采用final embedding
+                metric_emb = self.r_emb
+            else:
+                metric_emb = self.model_gat.relation_embeddings
+            loss = torch.zeros(num_rule).cuda()#.requires_grad_()
+            
+            target_r = self.r
+            #Cut wrong path;TODO C++ implementation,add(h,t) to rule sample
+            #t_list = self.Rt[target_r]
+            path_emb_list = []
+            ret_loss_rule = ret_loss_rule.softmax(dim=-1)#TODO
+            for i,path in enumerate(rule_path):
+                if i==0:
+                    #loss[i]=0
+                    continue
+                rule = list(path)
+                eval_loss = ret_loss_rule[i].item()
+                gnd_list = path_gnd[i][1:-1]#TODO,add cb_r:h_list,t_list
+                print(f"Rule {rule} evaluator loss {eval_loss}.Length=",len(gnd_list),len(rule))
+                assert len(gnd_list)==len(rule)-1
+                path_emb = 0
+                last_r = -1
+                for j,r in enumerate(rule):
+                    if last_r>=0:
+                        if last_r not in self.r_dist.keys():
+                            print("Error last_r",last_r)
+                        elif self.r_dist[last_r] is None:
+                            print("Error last_r",last_r)
+                        else:
+                            if self.r_dist[last_r][r] is not None:
+                                path_emb = path_emb + self.r_dist_path(last_r,r,gnd_list[j-1],metric_final)
+                            else:
+                                print("Error last_r&r",last_r,r)
+                    if r < self.R:
+                        path_emb = path_emb + metric_emb[r]
+                    else:
+                        path_emb = path_emb - metric_emb[r]
+                    last_r = r
+                path_emb_list.append(path_emb)
+                loss[i]= cos(path_emb,metric_emb[target_r])/eval_loss
+            # path_emb_all = torch.stack(path_emb_list)#(num_rule,emb_size)
+            # target_emb = metric_emb[target_r].unsqueeze(0).repeat(self.num_rule,1)
+            # y = torch.ones(len(num_rule)).cuda()
+            # loss = gat_loss_func(path_emb_all, target_emb, y)
+            #loss_norm = torch.norm(loss, p=1, dim=1)
+            return loss.mean()
+
 
         
         cum_loss = 0
         #em_loss = torch.tensor(0.0).cuda().requires_grad_() + ret_loss
         epoch_losses = []
         init_flag = True
-        em_weight = 0.8
+        em_weight = 0.5
         #num_epoch = 1 #gen的epoch
         for epoch in range(1, num_epoch + 1):
             print("\nepoch-> ", epoch)
@@ -1208,14 +1342,27 @@ class CbGATGenerator(torch.nn.Module):
                 print("\n Run cb_model_gat forward",)
                 cb_entity_embed, cb_relation_embed,cb_entity_l_embed = cb_model_gat(
                     cb_Corpus_, cb_Corpus_.train_adj_matrix, cb_train_indices, current_batch_2hop_indices,ass_ent=relation_embed)
-           
+                
+                #update emb
+                if torch.cuda.device_count() > 1:
+                    self.model_gat = model_gat.module
+                    self.cb_model_gat = cb_model_gat.module
+                else:
+                    self.model_gat = model_gat
+                    self.cb_model_gat = cb_model_gat
+                #update final emb
+                self.e_emb = self.model_gat.final_entity_embeddings
+                self.r_emb = self.model_gat.final_relation_embeddings#得到GAT模型的最终嵌入
+                self.cb_e_emb  = self.cb_model_gat.final_entity_embeddings
+                self.cb_r_emb = self.cb_model_gat.final_relation_embeddings#得到GAT模型的最终嵌入
            
                 opt.zero_grad()
                 loss = batch_gat_loss(
                     gat_loss_func, train_indices, entity_embed, relation_embed)
                 cb_loss = batch_gat_loss(
                     gat_loss_func, cb_train_indices, cb_entity_embed, cb_relation_embed,mod = 1)
-                loss = (1-em_weight)*(loss + cb_loss) + em_weight*ret_loss
+                rl_loss = rule_loss(ret_loss_rule,self.rules_path,self.path_gnd,metric_final = True)#torch.nn.CosineEmbeddingLoss(reduction = "mean")
+                loss = (1-em_weight)*(loss + cb_loss)+10*em_weight*rl_loss #+ em_weight*ret_loss
                 loss.backward()
                 opt.step()
                 #sch.step()
@@ -1225,6 +1372,7 @@ class CbGATGenerator(torch.nn.Module):
                 #cum_loss += loss.item()
                 print("Iteration-> {0}  , Iteration_time-> {1:.4f} , Iteration_loss {2:.4f}".format(
                 iters, end_time_iter - start_time_iter, loss.data.item()))
+                
             
             sch.step()
             print("Epoch {} , average loss {} , epoch_time {}".format(
@@ -1244,10 +1392,14 @@ class CbGATGenerator(torch.nn.Module):
         if torch.cuda.device_count() > 1:
             self.model_gat = model_gat.module
             self.cb_model_gat = cb_model_gat.module
+        else:
+            self.model_gat = model_gat
+            self.cb_model_gat = cb_model_gat
+
     # gen rules from rule_file
     def rule_gen(self,r,rule_file,num_samples, max_len):
 
-        rules = [((r,), 1, -1)]
+        rules = []
         rule_set = set([tuple(), (r,)])
 
         #更新r_dist
@@ -1255,7 +1407,7 @@ class CbGATGenerator(torch.nn.Module):
         self.r_emb = self.model_gat.final_relation_embeddings#得到GAT模型的最终嵌入
         self.cb_e_emb  = self.cb_model_gat.final_entity_embeddings
         self.cb_r_emb = self.cb_model_gat.final_relation_embeddings#得到GAT模型的最终嵌入
-        self.r_dist = self.patch_r_dist(r_num = 2*self.R)
+        #self.r_dist = self.patch_r_dist(r_num = 2*self.R)
         has_inv = False
         with open(rule_file) as file:
             for i, line in enumerate(file):
@@ -1278,23 +1430,29 @@ class CbGATGenerator(torch.nn.Module):
                     #print("Jump inv_rel rule:",path)
                     continue#去掉rulefile里的逆关系规则
                 #print("path",path)
-                print("Calc score for rule:",path)
-                sc = self.cb_rule_score_gnd(r,path)
-                print("Score  = ",sc)
+                #print("Calc score for rule:",path)
+                gnd_list = []
+                sc ,gnd_list = self.cb_rule_score_gnd(r,path)
+                print(path,"Score  = ",sc,"sample prec",prec)
                 rule_set.add(path)
                 if len(path) <= max_len:
-                    rules.append((path, sc,i))
+                    rules.append((path,gnd_list, sc,i,prec))
+                    #self.path_gnd.append((gnd_list, sc,i))
                 # except:
                 #     continue
         #print("____len(rules),num_samples____",len(rules),len(rule_set),num_samples) 
         #print("____rules____",rules)            
-        rules = sorted(rules, key=lambda x: (x[1], x[2]), reverse=True)[:num_samples]#利用权重排序rule
+        rules = sorted(rules, key=lambda x: (x[2], x[3]), reverse=True)[:num_samples]#利用权重排序rule
+        rules = [((r,),[dict()], 1, -1,1)]+rules#TODO,r的h_list/t_list
+        #rule_set = set([tuple(), (r,)])
+
         print(f"CbGAT generate candidate rules: |rules| = {len(rules)} max_rule_len = {max_len}")
-        x = torch.tensor([prec for _, prec, _ in rules]).cuda()
+        x = torch.tensor([sc for _,_, sc,_,_ in rules]).cuda()
         #prior = -torch.log((1 - x.float()).clamp(min=1e-6))#最好是0-1
         prior = x
-        rules = [path for path, _, _ in rules]
-        
+        self.path_gnd = [gnd_list for _,gnd_list, _, _,_ in rules]#同步更新生成的各规则的路径gndlist，形式为[[{h:count,...},{gnd:count,...},...{t:count,...}],...]
+        self.prec = [prec for _,_, _, _,prec in rules]
+        rules = [path for path, _,_, _,_ in rules]        
         return rules,prior
     #undireted,等增加CBGAT的有向向量学习
     def cb_rule_score(self,target_r,path):
@@ -1325,34 +1483,57 @@ class CbGATGenerator(torch.nn.Module):
         return angs
     
     def cb_rule_score_gnd(self,target_r,path):
-        h_list = list(self.Rh[target_r])
+        gnd_list = []#规则路径上所有的gnd实体及其路径次数count
+        h_list = list(self.Rh[target_r])#TODO
+        
+        hgnd = dict()
+        for h in h_list:
+            hgnd[h]=1
+        if len(hgnd)>0:
+            gnd_list.append(hgnd)
+        else:
+            gnd_list.append(None)
+
         rule_path = list(path)
         path_emb = torch.zeros(self.r_emb_len).cuda()
         last_r = -1
         cur_path = []
+        gnd = None
         for r in rule_path:
             if last_r>=0:
                 if last_r not in self.r_dist.keys():
+                    gnd_list.append(None)
                     return 1e-8
                 elif self.r_dist[last_r] is None:
+                    gnd_list.append(None)
                     return 1e-8
                 else:
                     if self.r_dist[last_r][r] is not None:
                         gnd = self.h_path_t(h_list,cur_path)
+                        gnd_list.append(gnd)
                         path_emb = path_emb + self.r_dist_path(last_r,r,gnd)
                     else:
+                        gnd_list.append(None)
                         return 1e-8
-            if r < self.R:
+            if r < self.R:#取读取模型的关系表征的长度
                 path_emb = path_emb + self.r_emb[r]
             else:
-                path_emb = path_emb - self.r_emb[r]
+                path_emb = path_emb - self.r_emb[r-self.R]
             last_r = r
             cur_path.append(r)
+        #if gnd is not None:
+        tgnd = self.h_path_t(h_list,cur_path)
+        if len(tgnd)>0:
+            gnd_list.append(tgnd)
+        else:
+            gnd_list.append(None)
+
         output = cos(path_emb,self.r_emb[target_r])#(1,-1)
         #angs = (torch.acos(output)*180/3.1415926).item()
         angs = output.item()
+        #self.path_gnd.append(gnd_list)
         print("Score for rule",rule_path," = ",angs)
-        return angs
+        return angs,gnd_list
 
     def h_path_t(self,h_list,path):#返回{t:count}
         gnd = dict()
@@ -1364,15 +1545,22 @@ class CbGATGenerator(torch.nn.Module):
                 else:
                     gnd[key] = value
         return gnd
-    def r_dist_path(self,last_r,r,gnd): #gnd中的t即为last_r,r之间的cb_relation
+    def r_dist_path(self,last_r,r,gnd,metric_final = True): #gnd中的t即为last_r,r之间的cb_relation
         # e_list = self.cb_kg[last_r][r]
         # for t in gnd.keys():
         #     if t not in e_list:
         #         print("Error gnd for last_rel & rel",last_r,r)
+        if metric_final:
+            metric_emb = self.cb_r_emb
+        else:
+            metric_emb = self.cb_model_gat.relation_embeddings
         wt = torch.tensor(list(gnd.values())).float()
         wt_norm = torch.nn.functional.normalize(wt,p=1,dim=0).cuda()  
         #print(mid_e.shape)
-        mid_e_emd = self.cb_r_emb[list(gnd.keys()),:].cuda()
+        print("len(self.cb_kg[last_r][r]),len(gnd):",len(self.cb_kg[last_r][r]),len(gnd))
+        cb_r_list = list(set(self.cb_kg[last_r][r])&set(gnd.keys()))
+        #mid_e_emd = metric_emb[list(gnd.keys()),:].cuda()
+        mid_e_emd = metric_emb[cb_r_list,:].cuda()
         mean_mid_e_emd = mid_e_emd*wt_norm.unsqueeze(-1)
         r_dist = mean_mid_e_emd.sum(dim=0)
         #print(mid_e_emd.shape)
@@ -1389,10 +1577,10 @@ class CbGATGenerator(torch.nn.Module):
                 if last_r>=self.R and r>=self.R:
                     path_emb = path_emb - self.r_dist[r-self.R][last_r-self.R]
 
-            if r < self.R:
+            if r < self.R:#取读取模型的关系表征的长度
                 path_emb = path_emb + self.r_emb[r]
             else:
-                path_emb = path_emb - self.r_emb[r]
+                path_emb = path_emb - self.r_emb[r-self.R]
             last_r = r
         output = cos(path_emb,self.r_emb[target_r])
         #angs = (torch.acos(output)*180/3.1415926).item()

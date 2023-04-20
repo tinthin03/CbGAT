@@ -12,7 +12,7 @@ class Metrics:
         self.pre_h1 = [0]
         self.pre_h3 = [0]
         self.pre_h10 = [0]
-        for i in range(1, N + 10):
+        for i in range(1, N + 10):#表示命中为i时，几个metric的赋值
             self.pre_mr.append(self.pre_mr[-1] + i)
             self.pre_mrr.append(self.pre_mrr[-1] + 1.0 / i)
             self.pre_h1.append(self.pre_h1[-1] + (1 if i <= 1 else 0))
@@ -29,7 +29,7 @@ class Metrics:
         with torch.no_grad():
             incorrect = score[~answer.bool()]
             rankl = (incorrect > score[t]).sum().item()  # + 1
-            rankr = (incorrect >= score[t]).sum().item() + 1
+            rankr = (incorrect >= score[t]).sum().item() + 1#预测hit的位置
             mr = (self.pre_mr[rankr] - self.pre_mr[rankl]) / (rankr - rankl)
             mrr = (self.pre_mrr[rankr] - self.pre_mrr[rankl]) / (rankr - rankl)
             h1 = (self.pre_h1[rankr] - self.pre_h1[rankl]) / (rankr - rankl)

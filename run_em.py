@@ -88,12 +88,14 @@ dataset = load_dataset(f"{DATA_DIR}")#键值为['train', 'valid', 'test']的字�
 # rule_sample.use_graph(dataset_graph(dataset, 'train'))
 # for r in range(start, dataset['R'], hop):#遍历关系r，抽样其相关的三元组知识,并抽取可能的规则路径
 #     # Usage: rule_sample.sample(relation, dict: rule_len -> num_per_sample, num_samples, ...)
-#     num_tr = dataset['T'][int(r)]
-#     num_samples = 1000+2*num_tr
-#     print("Predicate",r,"has",num_tr,"tripples,sample rules",num_samples,"times from its tripples.")
-#     rules = rule_sample.sample(r, {1: 3, 2: 30, 3: 30, 4: 40, 5: 60, 6: 100}, num_samples, num_threads=12, samples_per_print=100)
+#     # num_tr = dataset['T'][int(r)]
+#     # num_samples = 1000+2*num_tr
+#     num_samples = 1000
+#     #print("Predicate",r,"has",num_tr,"tripples,sample rules",num_samples,"times from its tripples.")
+#     #rules = rule_sample.sample(r, {1: 3, 2: 30, 3: 30, 4: 40, 5: 60, 6: 100}, num_samples, num_threads=12, samples_per_print=100)
+#     rules = rule_sample.sample(r, {1: 3, 2: 30, 3: 30, 4: 30}, num_samples, num_threads=12, samples_per_print=100)
 #     print("Sample",len(rules),"rules.")
-#     rule_sample.save(rules, f"{DATA_EM_DIR}/Rules6++/rules_{r}.txt")#抽样样本集
+#     rule_sample.save(rules, f"{DATA_DIR}/Rules/rules_{r}.txt")#抽样样本集
 
 
 
@@ -105,10 +107,23 @@ for name, param in model.named_parameters():
     model.print(f"Model Parameter: {name} ({param.type()}:{param.size()})")
 
 # Step 4: Train and output test results.
+result_stat = []
 for r in range(start, dataset['R'], hop):
     model.train_model(r,
-                      rule_file=f"{DATA_EM_DIR}/Rules++/rules_{r}.txt",
+                      rule_file=f"{DATA_DIR}/Rules4++/rules_{r}.txt",
                       model_file=f"{OUTPUT_DIR}/model_{r}.pth")
+    result_stat.append(model.result)#result[0]为末轮中所有样本的t_list之和，后面依次为mrr,mr,h1,h3,h10
+    lenth = len(result_stat)
+    print(lenth,"Result by now(num_of_t_list,mrr,mr,h1,h3,h10):")
+    res = torch.Tensor(result_stat)
+    res_sum = res.sum(0)
+    print("SUM:",res_sum)
+    print("AVG:",res_sum/lenth)
+    wt = torch.nn.functional.normalize(res[:,0],p=1,dim=0).unsqueeze(-1)
+    res_wt = (res[:,1:]*wt).sum(0)
+    print("WT_AVG:",res_wt)
+
+
 
 # Step 5: Merge results, if (start, hop) == (0, 1)
 if (start, hop) == (0, 1):
