@@ -46,7 +46,7 @@ hyperparams          =  {
 if len(sys.argv) > 7:
     hyperparams = dict(sys.argv[7])
 
-DATA_DIR          = "./data/FB15k-237" 
+DATA_DIR          = "./data/FB15k-237-direct-pretr" 
 '''
 Example:
 The script will train a separate model for each relation in range(start, total number of relations, hop).
@@ -117,7 +117,7 @@ for r in range(start, dataset['R'], hop):
     print(lenth,"Result by now(num_of_t_list,mrr,mr,h1,h3,h10):")
     res = torch.Tensor(result_stat)
     res_sum = res.sum(0)
-    print("SUM:",res_sum)
+    print("SUM,lenth:",res_sum,lenth)
     print("AVG:",res_sum/lenth)
     wt = torch.nn.functional.normalize(res[:,0],p=1,dim=0).unsqueeze(-1)
     res_wt = (res[:,1:]*wt).sum(0)

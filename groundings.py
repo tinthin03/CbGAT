@@ -40,8 +40,9 @@ def init_groundings():#来自文件，需要与use_graph的数据集保持一致
             pickle.dump(ground, handle,
                         protocol=pickle.HIGHEST_PROTOCOL)
     else:
-        print("Loading Generated groundings  >>>")
-        ground = pickle.load(open(file,'rb'))
+        if os.path.getsize(file) > 0:
+            print("Loading Generated groundings  >>>")
+            ground = pickle.load(open(file,'rb'))
     return ground
 
 def update_groundings(new_ground):

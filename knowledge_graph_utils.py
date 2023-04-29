@@ -32,11 +32,13 @@ def load_dataset(DATA_DIR):
     ret['T'] = dict()#每个关系对应的tripples数量
     ret['Rh']= dict()#每个关系对应的head
     ret['Rt']= dict()#每个关系对应的tail
+    ret['Rht']= dict()#每个关系对应的tail
 
     for r_id in range(R):
         ret['T'][r_id]=0
         ret['Rh'][r_id]=set()
         ret['Rt'][r_id]=set()
+        ret['Rht'][r_id]=set()
 
 
     for item in ['train', 'valid', 'test']:
@@ -55,6 +57,8 @@ def load_dataset(DATA_DIR):
                     ret['Rt'][int(r)].add(t)
                     ret['Rh'][int(r + mov)].add(t)
                     ret['Rt'][int(r + mov)].add(h)
+                    ret['Rht'][int(r)].add((h,t))
+                    ret['Rht'][int(r + mov)].add((t,h))
         else:
             with open(f"{DATA_DIR}/{item}.txt") as fin:
                 for line in fin:

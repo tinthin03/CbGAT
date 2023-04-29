@@ -85,7 +85,7 @@ def parse_args():
     
     # network arguments
     args.add_argument("-data", "--data",
-                      default="./data/FB15k-237/", help="data directory")
+                      default="./data/FB15k-237-direct-pretr/", help="data directory")
     args.add_argument("-e_g", "--epochs_gat", type=int,
                       default=3000, help="Number of epochs")
     args.add_argument("-e_c", "--epochs_conv", type=int,
@@ -103,7 +103,7 @@ def parse_args():
     args.add_argument("-u2hop", "--use_2hop", type=bool, default=False)
     args.add_argument("-p2hop", "--partial_2hop", type=bool, default=False)
     args.add_argument("-outfolder", "--output_folder",
-                      default="./checkpoints/fb/out/", help="Folder name to save the models.")
+                      default="./checkpoints/fb/out-pretr0330/", help="Folder name to save the models.")
 
     # arguments for GAT
     args.add_argument("-b_gat", "--batch_size_gat", type=int,
