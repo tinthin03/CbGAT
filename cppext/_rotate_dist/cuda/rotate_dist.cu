@@ -48,7 +48,7 @@ namespace cppext_rotate_dist {
 		thn >>= 5;
 
 		for(int64_t pos = (thi >> 5); pos < n; pos += thn) {
-			const scalar_t *a_pos = a + pos * 2 * d;
+			const scalar_t *a_pos = a + pos * 2 * d;//依次指向各个实体的emb
 			scalar_t re, im, value = 0;
 			for(int64_t i = (thi & 31); i < d; i += 32) {
 				re = x[i] - a_pos[i];

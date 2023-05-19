@@ -2,14 +2,15 @@ import groundings_cppext as cppgnd
 import torch
 from att import *
 
-def init_groundings():#来自文件，需要与use_graph的数据集保持一致
+
+def init_groundings(Noload = True):#来自文件，需要与use_graph的数据集保持一致
     file = args.data + "/cb_Corpus_graph.pickle"
     if not os.path.exists(file):
-        cb_kg = cb_Corpus_.get_multiroute_graph()
-        file = args.data + "/cb_Corpus_graph.pickle"
-        with open(file, 'wb') as handle:
-            pickle.dump(cb_kg, handle,
-                        protocol=pickle.HIGHEST_PROTOCOL)
+        # cb_kg = cb_Corpus_.get_multiroute_graph()
+        # file = args.data + "/cb_Corpus_graph.pickle"
+        # with open(file, 'wb') as handle:
+        #     pickle.dump(cb_kg, handle,
+        #                 protocol=pickle.HIGHEST_PROTOCOL)
         kg = Corpus_.get_multiroute_graph()
         file = args.data + "/Corpus_graph.pickle"
         with open(file, 'wb') as handle:
@@ -17,11 +18,11 @@ def init_groundings():#来自文件，需要与use_graph的数据集保持一致
                         protocol=pickle.HIGHEST_PROTOCOL)
     else:
         print("Loading Generated graph  >>>")
-        cb_kg = pickle.load(open(args.data + "/cb_Corpus_graph.pickle",'rb'))
+        #cb_kg = pickle.load(open(args.data + "/cb_Corpus_graph.pickle",'rb'))
         kg = pickle.load(open(args.data + "/Corpus_graph.pickle",'rb'))
 
     file = args.data +"/groundings.pickle"#ground[head][path]={grounding:count,...}
-    if not os.path.exists(file):
+    if (not os.path.exists(file)) or Noload:
         ground = dict()
         for e in range(len(Corpus_.entity2id)):
             ground[e]=dict()
@@ -36,9 +37,9 @@ def init_groundings():#来自文件，需要与use_graph的数据集保持一致
                             ground[h][key][t] += 1
                     else:
                         ground[h][key] = {t:1}
-        with open(file, 'wb') as handle:
-            pickle.dump(ground, handle,
-                        protocol=pickle.HIGHEST_PROTOCOL)
+        # with open(file, 'wb') as handle:
+        #     pickle.dump(ground, handle,
+        #                 protocol=pickle.HIGHEST_PROTOCOL)
     else:
         if os.path.getsize(file) > 0:
             print("Loading Generated groundings  >>>")

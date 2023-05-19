@@ -239,7 +239,7 @@ class SpKBGATConvOnly(nn.Module):
 
     def forward(self, Corpus_, adj, batch_inputs):
         conv_input = torch.cat((self.final_entity_embeddings[batch_inputs[:, 0], :].unsqueeze(1), self.final_relation_embeddings[
-            batch_inputs[:, 1]].unsqueeze(1), self.final_entity_embeddings[batch_inputs[:, 2], :].unsqueeze(1)), dim=1)
+            batch_inputs[:, 1]].unsqueeze(1), self.final_entity_embeddings[batch_inputs[:, 2], :].unsqueeze(1)), dim=1) #shape = batch_size, length, dim
         out_conv = self.convKB(conv_input)
         return out_conv
 

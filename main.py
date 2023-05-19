@@ -84,8 +84,16 @@ def parse_args():
     args = argparse.ArgumentParser()
     
     # network arguments
-    args.add_argument("-data", "--data",
-                      default="./data/FB15k-237-direct-pretr/", help="data directory")
+    if model_type=='rotatE':
+        args.add_argument("-data", "--data",
+                      default="./data/FB15k-237-rotate/", help="data directory")
+        args.add_argument("-outfolder", "--output_folder",
+                      default="./checkpoints/fb/out-rotate/", help="Folder name to save the models.") #out-inductive/ -rotate
+    else:
+        args.add_argument("-data", "--data",
+                        default="./data/FB15k-237/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
+        args.add_argument("-outfolder", "--output_folder",
+                        default="./checkpoints/fb/out/", help="Folder name to save the models.") #out-inductive/ -rotate
     args.add_argument("-e_g", "--epochs_gat", type=int,
                       default=3000, help="Number of epochs")
     args.add_argument("-e_c", "--epochs_conv", type=int,
@@ -102,8 +110,6 @@ def parse_args():
     args.add_argument("-g2hop", "--get_2hop", type=bool, default=False)
     args.add_argument("-u2hop", "--use_2hop", type=bool, default=False)
     args.add_argument("-p2hop", "--partial_2hop", type=bool, default=False)
-    args.add_argument("-outfolder", "--output_folder",
-                      default="./checkpoints/fb/out-pretr0330/", help="Folder name to save the models.")
 
     # arguments for GAT
     args.add_argument("-b_gat", "--batch_size_gat", type=int,
@@ -139,7 +145,7 @@ def parse_args():
 args = parse_args()
 # %%
 
-inv_relatation = True
+inv_relatation = False
 
 def load_data(args):
     #train_data：(train_triples, train_adjacency_mat)，即(三元组id， (rows, cols, data)),其中三元组id的每行为 (entity2id[e1], relation2id[relation], entity2id[e2])
@@ -264,8 +270,51 @@ print("Initial cb_entity dimensions {} , cb_relation dimensions {}".format(
 print("Initial entity dimensions {} , relation dimensions {}".format(
     entity_embeddings.size(), relation_embeddings.size()))#当纯随机时，都是50维（args决定）。但加入pretrain时，为100维。
 # %%
+#model_type = 'transE'
+model_type = 'rotatE'
+cos = torch.nn.CosineSimilarity(dim=0,eps=1e-12)#(1,-1)eps小一些，可以体高精度
+def infer(h,r,model = 'transE'):
+    if model=='transE':
+        return h+r
+    else:
+        re_h, im_h = torch.chunk(h, 2, dim=-1)#根据rotateE的原理，最后一维前后两段分别存放向量的实部和虚部
+
+        pi = 3.141592653589793238462643383279
+        r = r / (1 / pi)##rotateE的关系向量存放的是旋转角度信息
+
+        r_up,r_dn = torch.chunk(r, 2, dim=-1)
+
+        r_conj = torch.min(r_up-r_dn,r_up+r_dn) # r_up<0,r_dn<0时跳变r_up+r_dn，其他均为r_up-r_dn，模拟合取
+
+        re_r = torch.cos(r_conj)
+        im_r = torch.sin(r_conj)
+
+        re_res = re_h * re_r - im_h * im_r#实部
+        im_res = re_h * im_r + im_h * re_r#虚部
+
+        return torch.cat([re_res, im_res], dim=-1)
+def chain(r1,r2,model = 'transE'):
+    return r1+r2
+def dist(c,t,model = 'transE',sim_model = 'F1'):
+    if model=='transE':
+        #dist = torch.norm(c-t, p=1, dim=1)
+        if sim_model == 'cos':
+            dist = cos(c,t)
+            #dist = (1-cos(path_emb/2,metric_emb[target_r]))                
+        elif sim_model == 'F2':
+            dist = torch.linalg.norm((c)-t,ord=2, dim=1) #ord=2
+        else:#F1
+            dist = torch.linalg.norm((c)-t,ord=1, dim=1) #ord=1
+    else:
+        a = c - t
+        re, im = torch.chunk(a, 2, dim=-1)
+        a = torch.stack([re, im], dim=-1)
+        dist = a.norm(dim=-1).sum(dim=-1)
+        
+    return dist#shape=c.shape(0)=t.shape(0)
 
 CUDA = torch.cuda.is_available()
+
 
 #采用transE的目标函数计算loss，训练GAT
 #train_indices，训练集的id索引，每行是一个三元组
@@ -290,15 +339,17 @@ def batch_gat_loss(gat_loss_func, train_indices, entity_embed, relation_embed,mo
     relation_embeds = relation_embed[pos_triples[:, 1]]
     tail_embeds = entity_embed[pos_triples[:, 2]]
 
-    x = source_embeds + relation_embeds - tail_embeds
-    pos_norm = torch.norm(x, p=1, dim=1)
+    # x = source_embeds + relation_embeds - tail_embeds
+    # pos_norm = torch.norm(x, p=1, dim=1)
+    pos_norm = dist(infer(source_embeds,relation_embeds,model = model_type),tail_embeds,model = model_type)
 
     source_embeds = entity_embed[neg_triples[:, 0]]
     relation_embeds = relation_embed[neg_triples[:, 1]]
     tail_embeds = entity_embed[neg_triples[:, 2]]
 
-    x = source_embeds + relation_embeds - tail_embeds
-    neg_norm = torch.norm(x, p=1, dim=1)
+    # x = source_embeds + relation_embeds - tail_embeds
+    # neg_norm = torch.norm(x, p=1, dim=1)
+    neg_norm = dist(infer(source_embeds,relation_embeds,model = model_type),tail_embeds,model = model_type)
 
     y = -torch.ones(int(args.valid_invalid_ratio_gat) * len_pos_triples).cuda()
     # print("pos_norm.shape",pos_norm.shape)#6666
@@ -773,7 +824,9 @@ if __name__ == "__main__":
     print("train_gat & cubic ...")
     #train_gat(args)
     #print("train_gat complete")
-    train_gat_cb(args)
+    #train_gat_cb(args)
     print("train_gat_cb complete")
-    train_conv(args)
-    evaluate_conv(args, Corpus_.unique_entities_train)
+    inductive = False
+    if inductive == False:
+        train_conv(args)
+        evaluate_conv(args, Corpus_.unique_entities_train)

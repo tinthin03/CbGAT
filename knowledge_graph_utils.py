@@ -32,13 +32,11 @@ def load_dataset(DATA_DIR):
     ret['T'] = dict()#每个关系对应的tripples数量
     ret['Rh']= dict()#每个关系对应的head
     ret['Rt']= dict()#每个关系对应的tail
-    ret['Rht']= dict()#每个关系对应的tail
 
     for r_id in range(R):
         ret['T'][r_id]=0
         ret['Rh'][r_id]=set()
         ret['Rt'][r_id]=set()
-        ret['Rht'][r_id]=set()
 
 
     for item in ['train', 'valid', 'test']:
@@ -46,7 +44,8 @@ def load_dataset(DATA_DIR):
         if item == 'train':
             with open(f"{DATA_DIR}/{item}.txt") as fin:
                 for line in fin:
-                    h, r, t = line.strip().split('\t')
+                    #h, r, t = line.strip().split('\t')
+                    h, r, t = line.strip().split()
                     h, r, t = entity2id[h], relation2id[r], entity2id[t]
 
                     edges.append([h, r, t])
@@ -57,12 +56,11 @@ def load_dataset(DATA_DIR):
                     ret['Rt'][int(r)].add(t)
                     ret['Rh'][int(r + mov)].add(t)
                     ret['Rt'][int(r + mov)].add(h)
-                    ret['Rht'][int(r)].add((h,t))
-                    ret['Rht'][int(r + mov)].add((t,h))
         else:
             with open(f"{DATA_DIR}/{item}.txt") as fin:
                 for line in fin:
-                    h, r, t = line.strip().split('\t')
+                    #h, r, t = line.strip().split('\t')
+                    h, r, t = line.strip().split()
                     h, r, t = entity2id[h], relation2id[r], entity2id[t]
 
                     edges.append([h, r, t])
@@ -106,6 +104,7 @@ if __name__ == "__main__":
  
     entity_embed = torch.tensor(numpy.load(f"{DATA_EM_DIR}/RotatE_500/entity_embedding.npy"))
     relation_embed = torch.tensor(numpy.load(f"{DATA_EM_DIR}/RotatE_500/relation_embedding.npy"))
+    print(entity_embed.shape,relation_embed.shape)
 
     with open(f'{DATA_DIR}/entity2id.txt') as fin:
         id2entity = dict()
@@ -156,5 +155,5 @@ if __name__ == "__main__":
 
     n_entity_embed = entity_embed[elist]
     n_relation_embed = relation_embed[rlist]
-    numpy.save(f"{DATA_DIR}/RotatE_500/entity_embedding.npy",n_entity_embed)
-    numpy.save(f"{DATA_DIR}/RotatE_500/relation_embedding.npy",n_relation_embed)
+    # numpy.save(f"{DATA_DIR}/RotatE_500/entity_embedding.npy",n_entity_embed)
+    # numpy.save(f"{DATA_DIR}/RotatE_500/relation_embedding.npy",n_relation_embed)

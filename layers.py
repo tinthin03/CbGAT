@@ -29,7 +29,7 @@ class ConvKB(nn.Module):
         conv_input = conv_input.transpose(1, 2)
         # batch * length(which is 3 here -> entity,relation,entity) * dim
         # To make tensor of size 4, where second dim is for input channels
-        conv_input = conv_input.unsqueeze(1)
+        conv_input = conv_input.unsqueeze(1) #shape = batch_size,1,dim,length=3, 
 
         out_conv = self.dropout(
             self.non_linearity(self.conv_layer(conv_input)))
