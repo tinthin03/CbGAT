@@ -80,20 +80,35 @@ def parse_args_wn18():
     args = args.parse_args()
     return args
 
+#model_type = 'transE'
+model_type = 'rotatE'
+inductive = False
 def parse_args():
     args = argparse.ArgumentParser()
     
     # network arguments
     if model_type=='rotatE':
-        args.add_argument("-data", "--data",
-                      default="./data/FB15k-237-rotate/", help="data directory")
-        args.add_argument("-outfolder", "--output_folder",
-                      default="./checkpoints/fb/out-rotate/", help="Folder name to save the models.") #out-inductive/ -rotate
+        if inductive:
+            args.add_argument("-data", "--data",
+                        default="./data/FB15k-237-rotate/inductive/", help="data directory")  #FB15k-237-rotate/inductive/
+            args.add_argument("-outfolder", "--output_folder",
+                      default="./checkpoints/fb/out-rotate-inductive/", help="Folder name to save the models.") #   /out-rotate-inductive/
+        else:            
+            args.add_argument("-data", "--data",
+                        default="./data/FB15k-237-rotate/", help="data directory")  #FB15k-237-rotate/inductive/
+            args.add_argument("-outfolder", "--output_folder",
+                      default="./checkpoints/fb/out-rotate/", help="Folder name to save the models.") #   /out-rotate-inductive/
     else:
-        args.add_argument("-data", "--data",
-                        default="./data/FB15k-237/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
-        args.add_argument("-outfolder", "--output_folder",
-                        default="./checkpoints/fb/out/", help="Folder name to save the models.") #out-inductive/ -rotate
+        if inductive:
+            args.add_argument("-data", "--data",
+                            default="./data/FB15k-237/inductive2/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
+            args.add_argument("-outfolder", "--output_folder",
+                            default="./checkpoints/fb/out-inductive2/", help="Folder name to save the models.") #out-inductive/ -rotate
+        else:
+            args.add_argument("-data", "--data",
+                            default="./data/FB15k-237/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
+            args.add_argument("-outfolder", "--output_folder",
+                            default="./checkpoints/fb/out/", help="Folder name to save the models.") #out-inductive/ -rotate
     args.add_argument("-e_g", "--epochs_gat", type=int,
                       default=3000, help="Number of epochs")
     args.add_argument("-e_c", "--epochs_conv", type=int,

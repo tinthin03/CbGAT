@@ -23,4 +23,4 @@ time1 = $(date +%Y-%m-%d-%H%M)
 
 #CUDA_VISIBLE_DEVICES="$@" nohup python -u run_em.py > cos-path5--disbuf-grapht_ind-rely_gen_one-l1000x0.1mx200-tr9-noinv-R4+.out &
 
-CUDA_VISIBLE_DEVICES="$@" nohup python -u run_em.py > rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx330-tr9-noinv-R4+.out &
+CUDA_VISIBLE_DEVICES="$@" nohup python -u run_em.py > rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx325-tr9-noinv-R4+.out &

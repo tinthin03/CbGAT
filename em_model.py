@@ -13,9 +13,12 @@ from knowledge_graph_utils import *
 
 
 #注意，每次调用train_Model，都需要指定一个目标谓词
-ORG_DATA_DIR = "./data/FB15k-237/"
+if model_type == "rotatE":
+    ORG_DATA_DIR = "./data/FB15k-237-rotate/"
+else:
+    ORG_DATA_DIR = "./data/FB15k-237/"
 recall = True#False#True
-inductive = False
+# inductive = False
 sim_model = 'cos'#cos#F1#F2
 path_model = 1 #1:rel+cbrel;2:rel+head+cbrel;3:ln*headrel+(ln-j)*cbrel;4:ln*headrel+cbrel(错测为1),5:未曾设想的道路
 #model_type = 'rotatE'
@@ -687,7 +690,7 @@ class Evaluator(ReasoningModel):
         def_args = dict()
         def_args['rotate_pretrained'] = None
         def_args['max_beam_rules'] = 3000#生成器生成或rulefile筛选的规则总数
-        def_args['max_rules'] = 330##对每个h/样本batch抽取pgnd时，使用规则的最大数量（也是E-step训练评估器的样本数量）。如crule=[0,0,1., 1., 1., 2., 2., 2.]，则此数为3。
+        def_args['max_rules'] = 325##对每个h/样本batch抽取pgnd时，使用规则的最大数量（也是E-step训练评估器的样本数量）。如crule=[0,0,1., 1., 1., 2., 2., 2.]，则此数为3。
         def_args['max_rule_len'] = 4
         def_args['max_h'] = 5000
         def_args['max_best_rules'] = 300#每epoch评估器生成的生成器训练样本的最大数量，M-step的best_rules()时使用
