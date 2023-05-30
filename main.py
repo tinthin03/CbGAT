@@ -25,11 +25,28 @@ import pickle
 # %%from torchviz import make_dot, make_dot_from_trace
 
 
+#model_type = 'transE'
+model_type = 'rotatE'
+inductive = False
+
 def parse_args_wn18():
     args = argparse.ArgumentParser()
     # network arguments
-    args.add_argument("-data", "--data",
-                      default="./data/WN18RR/", help="data directory")
+    
+    if model_type=='rotatE':
+        args.add_argument("-data", "--data",
+                        default="./data/WN18RR-rotate/", help="data directory")
+        
+        args.add_argument("-outfolder", "--output_folder",
+                        default="./checkpoints/wn/out-rotate/", help="Folder name to save the models.")
+    
+    else:
+        args.add_argument("-data", "--data",
+                        default="./data/WN18RR/", help="data directory")
+        
+        args.add_argument("-outfolder", "--output_folder",
+                        default="./checkpoints/wn/out/", help="Folder name to save the models.")
+    
     args.add_argument("-e_g", "--epochs_gat", type=int,
                       default=3600, help="Number of epochs")
     args.add_argument("-e_c", "--epochs_conv", type=int,
@@ -39,15 +56,13 @@ def parse_args_wn18():
     args.add_argument("-w_conv", "--weight_decay_conv", type=float,
                       default=1e-5, help="L2 reglarization for conv")
     args.add_argument("-pre_emb", "--pretrained_emb", type=bool,
-                      default=True, help="Use pretrained embeddings")
+                      default=False, help="Use pretrained embeddings")
     args.add_argument("-emb_size", "--embedding_size", type=int,
                       default=50, help="Size of embeddings (if pretrained not used)")
     args.add_argument("-l", "--lr", type=float, default=1e-3)
     args.add_argument("-g2hop", "--get_2hop", type=bool, default=False)
-    args.add_argument("-u2hop", "--use_2hop", type=bool, default=True)
+    args.add_argument("-u2hop", "--use_2hop", type=bool, default=False)
     args.add_argument("-p2hop", "--partial_2hop", type=bool, default=False)
-    args.add_argument("-outfolder", "--output_folder",
-                      default="./checkpoints/wn/out/", help="Folder name to save the models.")
 
     # arguments for GAT
     args.add_argument("-b_gat", "--batch_size_gat", type=int,
@@ -80,9 +95,6 @@ def parse_args_wn18():
     args = args.parse_args()
     return args
 
-#model_type = 'transE'
-model_type = 'rotatE'
-inductive = False
 def parse_args():
     args = argparse.ArgumentParser()
     
@@ -157,7 +169,8 @@ def parse_args():
     args = args.parse_args()
 
     return args
-args = parse_args()
+#args = parse_args()
+args = parse_args_wn18()
 # %%
 
 inv_relatation = False
@@ -839,7 +852,7 @@ if __name__ == "__main__":
     print("train_gat & cubic ...")
     #train_gat(args)
     #print("train_gat complete")
-    #train_gat_cb(args)
+    train_gat_cb(args)
     print("train_gat_cb complete")
     inductive = False
     if inductive == False:

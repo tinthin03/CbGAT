@@ -6,4 +6,7 @@ time1 = `$(date +%Y-%m-%d-%H%M)`
 
 #CUDA_VISIBLE_DEVICES="$@" nohup python -u knowledge_graph_utils.py > kbtest.out${time1}.out &
 
-CUDA_VISIBLE_DEVICES="$@" nohup python -u main.py > trainCB-rotate-conv${time1}.out &
+#CUDA_VISIBLE_DEVICES="$@" nohup python -u main.py > trainCB-rotate-conv${time1}.out &
+
+
+CUDA_VISIBLE_DEVICES="$@" nohup python -u main.py > wnCB-rotate-conv2.2${time1}.out &

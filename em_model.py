@@ -692,7 +692,7 @@ class Evaluator(ReasoningModel):
         def_args = dict()
         def_args['rotate_pretrained'] = None
         def_args['max_beam_rules'] = 3000#生成器生成或rulefile筛选的规则总数
-        def_args['max_rules'] = 324##对每个h/样本batch抽取pgnd时，使用规则的最大数量（也是E-step训练评估器的样本数量）。如crule=[0,0,1., 1., 1., 2., 2., 2.]，则此数为3。
+        def_args['max_rules'] = 322##对每个h/样本batch抽取pgnd时，使用规则的最大数量（也是E-step训练评估器的样本数量）。如crule=[0,0,1., 1., 1., 2., 2., 2.]，则此数为3。
         def_args['max_rule_len'] = max_rule_length
         def_args['max_h'] = 5000
         def_args['max_best_rules'] = 300#每epoch评估器生成的生成器训练样本的最大数量，M-step的best_rules()时使用
