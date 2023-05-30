@@ -22,8 +22,10 @@ recall = True#False#True
 sim_model = 'cos'#cos#F1#F2
 path_model = 1 #1:rel+cbrel;2:rel+head+cbrel;3:ln*headrel+(ln-j)*cbrel;4:ln*headrel+cbrel(错测为1),5:未曾设想的道路
 #model_type = 'rotatE'
+max_rule_length = 4
 #暂存groundings；其知识来自文件，需要与use_graph的数据集保持一致
 #session_groundings = groundings.init_groundings()
+
 
 def calc_groundings(h, rule,r_groundings,count=False): # buffer when train graph
     # if inductive:
@@ -690,8 +692,8 @@ class Evaluator(ReasoningModel):
         def_args = dict()
         def_args['rotate_pretrained'] = None
         def_args['max_beam_rules'] = 3000#生成器生成或rulefile筛选的规则总数
-        def_args['max_rules'] = 325##对每个h/样本batch抽取pgnd时，使用规则的最大数量（也是E-step训练评估器的样本数量）。如crule=[0,0,1., 1., 1., 2., 2., 2.]，则此数为3。
-        def_args['max_rule_len'] = 4
+        def_args['max_rules'] = 324##对每个h/样本batch抽取pgnd时，使用规则的最大数量（也是E-step训练评估器的样本数量）。如crule=[0,0,1., 1., 1., 2., 2., 2.]，则此数为3。
+        def_args['max_rule_len'] = max_rule_length
         def_args['max_h'] = 5000
         def_args['max_best_rules'] = 300#每epoch评估器生成的生成器训练样本的最大数量，M-step的best_rules()时使用
         def_args['param_relation_embed'] = True

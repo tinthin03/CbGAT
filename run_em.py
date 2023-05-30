@@ -27,7 +27,7 @@ from merge_results import calc_result
 import rule_sample
 from knowledge_graph_utils import *
 #from groundings import *
-from em_model import EMiner
+from em_model import EMiner,max_rule_length
 
 
 DATA_EM_DIR          = "./data_em/FB15k-237"    if len(sys.argv) <= 1 else eval(sys.argv[1])
@@ -128,7 +128,7 @@ result_quality = []
 lenth_org = len(result_stat)
 for r in range(start, dataset['R'], hop):
     model.train_model(r,
-                      rule_file=f"{DATA_DIR}/Rules4++/rules_{r}.txt",
+                      rule_file=f"{DATA_DIR}/Rules{str(max_rule_length)}++/rules_{r}.txt",
                       model_file=f"{OUTPUT_DIR}/model_{r}.pth")
     result_stat.append(model.result)#result[0]为末轮中所有样本的t_list之和，后面依次为mrr,mr,h1,h3,h10
     result_sum.append(model.result)

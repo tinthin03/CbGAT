@@ -1,8 +1,8 @@
 import os,pickle
 
-filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx300-tr9-noinv-R4+.out"
-#filename="cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx200-tr9-noinv-R4+.out"
-filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx330-tr9-noinv-R4+.out"
+# filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx300-tr9-noinv-R4+.out"
+# #filename="cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx200-tr9-noinv-R4+.out"
+# filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx330-tr9-noinv-R4+.out"
 def analysis(filename,compTnum = None,R = 237):
     with open(filename) as f:
         lines = f.readlines()
@@ -47,7 +47,10 @@ def analysis(filename,compTnum = None,R = 237):
             Tnum = int(inftest[2])
             Tnum_dict[rind] = Tnum
             if compTnum is not None:
-                Tnum = compTnum[rind]
+                if rind in compTnum.keys():
+                    Tnum = compTnum[rind]
+                else:
+                    Tnum = 0
             Tmrr[count_ind] += float(inftest[4])*Tnum
             TH1[count_ind] += float(inftest[5])*Tnum
             count_ind += 1
@@ -68,11 +71,12 @@ def analysis(filename,compTnum = None,R = 237):
     for i,num in Tnum_dict.items():
         ct += num
         #print(i,num)
-    print(ct,Tsmp)
+    print(rind,ct,"ACT analysis Tnum",Tsmp)
     return Tnum_dict
 if __name__ == "__main__":
-    filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx330-tr9-noinv-R4+.out"
-    comTnum1 = analysis(filename)
-    filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx300-tr9-noinv-R4+.out"
-    comTnum2 = analysis(filename)
-    comTnum2 = analysis(filename,comTnum1)
+    filename="rot-cos-path1-inductive-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx300-tr9-noinv-R4+.out"
+    curtR = 224
+    comTnum1 = analysis(filename,R=curtR)
+    filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx375-tr9-noinv-R4+.out"
+    comTnum2 = analysis(filename,R=curtR)
+    comTnum2 = analysis(filename,comTnum1,R=curtR)
