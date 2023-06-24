@@ -3,7 +3,7 @@ import os,pickle
 # filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx300-tr9-noinv-R4+.out"
 # #filename="cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx200-tr9-noinv-R4+.out"
 # filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx330-tr9-noinv-R4+.out"
-def analysis(filename,compTnum = None,R = 237):
+def analysis(filename,compTnum = None,R = 237,roundnum = 10):
     with open(filename) as f:
         lines = f.readlines()
     rule_quality = dict()
@@ -12,7 +12,7 @@ def analysis(filename,compTnum = None,R = 237):
     VH1 = dict()
     TH1 = dict()
     Tnum_dict = dict()
-    roundnum = 10
+    
     Vsmp = 0 #样本数
     Tsmp = 0 #样本数
     for i in range(roundnum):
@@ -75,8 +75,12 @@ def analysis(filename,compTnum = None,R = 237):
     return Tnum_dict
 if __name__ == "__main__":
     filename="rot-cos-path1-inductive-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx300-tr9-noinv-R4+.out"
-    curtR = 224
-    comTnum1 = analysis(filename,R=curtR)
+    filename = 'rec_237_rnnlogic'
+    curtR = 237
+    print(filename)
+    comTnum1 = analysis(filename,R=curtR,roundnum = 4)
     filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx375-tr9-noinv-R4+.out"
+    print(filename)
     comTnum2 = analysis(filename,R=curtR)
+    print(filename)
     comTnum2 = analysis(filename,comTnum1,R=curtR)

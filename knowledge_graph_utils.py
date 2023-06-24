@@ -3,7 +3,7 @@ import torch
 from extra.data.graph import Graph
 
 
-def load_dataset(DATA_DIR):
+def load_dataset(DATA_DIR,exp = "fb"):
     entity2id = dict()
     relation2id = dict()
 
@@ -16,7 +16,8 @@ def load_dataset(DATA_DIR):
     with open(f'{DATA_DIR}/relation2id.txt') as fin:
         relation2id = dict()
         for line in fin:
-            relation,rid = line.strip().split('\t')
+            #relation,rid = line.strip().split('\t')
+            relation,rid = line.strip().split()
             relation2id[relation] = int(rid)
 
     E = len(entity2id)
@@ -37,9 +38,12 @@ def load_dataset(DATA_DIR):
         ret['T'][r_id]=0
         ret['Rh'][r_id]=set()
         ret['Rt'][r_id]=set()
-
-
-    for item in ['train', 'valid', 'test']:
+    
+    if exp == 'ilpc' or exp == 'ilpc-large':
+        Graphs = ['train', 'valid', 'test', 'inference']
+    else:
+        Graphs = ['train', 'valid', 'test']
+    for item in Graphs:
         edges = []
         if item == 'train':
             with open(f"{DATA_DIR}/{item}.txt") as fin:
@@ -100,60 +104,63 @@ def mask2list(m):
 if __name__ == "__main__":
     DATA_EM_DIR          = "./data_em/FB15k-237" 
     DATA_DIR          = "./data/FB15k-237" 
+    DATA_EM_DIR          = "./data_em/umls" 
+    DATA_DIR          = "./data/umls-rotate" 
     import numpy
- 
-    entity_embed = torch.tensor(numpy.load(f"{DATA_EM_DIR}/RotatE_500/entity_embedding.npy"))
-    relation_embed = torch.tensor(numpy.load(f"{DATA_EM_DIR}/RotatE_500/relation_embedding.npy"))
-    print(entity_embed.shape,relation_embed.shape)
+    dims = [50,100,200,500,1000,2000] # modify for datasets
+    for dim in dims:
+        entity_embed = torch.tensor(numpy.load(f"{DATA_EM_DIR}/RotatE_{str(dim)}/entity_embedding.npy"))
+        relation_embed = torch.tensor(numpy.load(f"{DATA_EM_DIR}/RotatE_{str(dim)}/relation_embedding.npy"))
+        print(entity_embed.shape,relation_embed.shape)
 
-    with open(f'{DATA_DIR}/entity2id.txt') as fin:
-        id2entity = dict()
-        for line in fin:
-            entity,eid = line.strip().split('\t')
-            id2entity[int(eid)] = entity
+        with open(f'{DATA_DIR}/entity2id.txt') as fin:
+            id2entity = dict()
+            for line in fin:
+                entity,eid = line.strip().split('\t')
+                id2entity[int(eid)] = entity
 
-    with open(f'{DATA_DIR}/relation2id.txt') as fin:
-        id2relation = dict()
-        for line in fin:
-            relation,rid = line.strip().split('\t')
-            id2relation[int(rid)] = relation
+        with open(f'{DATA_DIR}/relation2id.txt') as fin:
+            id2relation = dict()
+            for line in fin:
+                relation,rid = line.strip().split('\t')
+                id2relation[int(rid)] = relation
 
-    with open(f'{DATA_EM_DIR}/entities.dict') as fin:
-        entity2id_em = dict()
-        for line in fin:
-            eid,entity = line.strip().split('\t')
-            entity2id_em[entity] = int(eid)
+        with open(f'{DATA_EM_DIR}/entities.dict') as fin:
+            entity2id_em = dict()
+            for line in fin:
+                eid,entity = line.strip().split('\t')
+                entity2id_em[entity] = int(eid)
 
-    with open(f'{DATA_EM_DIR}/relations.dict') as fin:
-        relation2id_em = dict()
-        for line in fin:
-            rid,relation = line.strip().split('\t')
-            relation2id_em[relation] = int(rid)
-    trE = dict()#id2emid
-    trR = dict()
-    elist = []
-    rlist = []
-    # for eid in range(len(id2entity_em)):
-    #     neid = entity2id[id2entity_em[eid]]
-    #     trE[eid] = neid
-    #     elist.append(neid)
-    # for rid in range(len(id2relation_em)):
-    #     nrid = relation2id[id2entity_em[rid]]
-    #     trE[rid] = nrid
-    #     rlist.append(nrid)
+        with open(f'{DATA_EM_DIR}/relations.dict') as fin:
+            relation2id_em = dict()
+            for line in fin:
+                rid,relation = line.strip().split('\t')
+                relation2id_em[relation] = int(rid)
+        trE = dict()#id2emid
+        trR = dict()
+        elist = []
+        rlist = []
+        # for eid in range(len(id2entity_em)):
+        #     neid = entity2id[id2entity_em[eid]]
+        #     trE[eid] = neid
+        #     elist.append(neid)
+        # for rid in range(len(id2relation_em)):
+        #     nrid = relation2id[id2entity_em[rid]]
+        #     trE[rid] = nrid
+        #     rlist.append(nrid)
 
-    for eid in range(len(id2entity)):
-        # print(eid)
-        # print(id2entity[eid])
-        neid = entity2id_em[id2entity[eid]]
-        trE[eid] = neid#id2emid
-        elist.append(neid)#id2emid
-    for rid in range(len(id2relation)):
-        nrid = relation2id_em[id2relation[rid]]
-        trR[rid] = nrid
-        rlist.append(nrid)
+        for eid in range(len(id2entity)):
+            # print(eid)
+            # print(id2entity[eid])
+            neid = entity2id_em[id2entity[eid]]
+            trE[eid] = neid#id2emid
+            elist.append(neid)#id2emid
+        for rid in range(len(id2relation)):
+            nrid = relation2id_em[id2relation[rid]]
+            trR[rid] = nrid
+            rlist.append(nrid)
 
-    n_entity_embed = entity_embed[elist]
-    n_relation_embed = relation_embed[rlist]
-    # numpy.save(f"{DATA_DIR}/RotatE_500/entity_embedding.npy",n_entity_embed)
-    # numpy.save(f"{DATA_DIR}/RotatE_500/relation_embedding.npy",n_relation_embed)
+        n_entity_embed = entity_embed[elist]
+        n_relation_embed = relation_embed[rlist]
+        numpy.save(f"{DATA_DIR}/RotatE_{str(dim)}/entity_embedding.npy",n_entity_embed)
+        numpy.save(f"{DATA_DIR}/RotatE_{str(dim)}/relation_embedding.npy",n_relation_embed)

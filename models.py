@@ -75,7 +75,7 @@ class SpGAT(nn.Module):
         x = F.elu(x) #将多head的attention转为输出维度的嵌入，其中采用本step更新后的关系嵌入.[14541, 200] or [237, 200]
         x_l = F.elu(x_l) #[200, 272115]
         x_w = F.elu(x_w) #[200, 272115]
-        return x, out_relation_1,x_l,x_w #输出训练后的实体嵌入表、关系嵌入表。
+        return x, out_relation_1,x_l,x_w #输出训练后的实体嵌入表、关系嵌入表（x, out_relation_1为final）。
 
 
 class SpKBGATModified(nn.Module):#initial_entity_emb、initial_relation_emb决定了模型运行时实体、关系的embedding

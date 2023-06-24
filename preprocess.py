@@ -164,7 +164,7 @@ def build_data(path='./data/WN18RR/', is_unweigted=False, directed=True):
 
 #生成训练所需的三元组和邻接矩阵
 #对于(h,r,t),邻接矩阵train_cb_adjacency_mat的每行，cb_rows:t,cb_cols:h,cb_data:r
-def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,inductive_use_org = False,org_load_data = "org_load_data_pickle.pickle"):
+def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,inductive_use_org = False,org_load_data = "org_load_data_pickle.pickle",cubic_from_reverse = False,reverse_load_data = "reverse_load_data_pickle.pickle"):
     entity2id = read_entity_from_id(path + 'entity2id.txt')
     relation2id = read_relation_from_id(path + 'relation2id.txt',directed)
     R = int(len(relation2id.keys())/2) # 237
@@ -230,6 +230,47 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
 
                         if indx % 100== 0:
                             print("     Gen cubic ent ():",tri[1], e1_id, rel_id)
+                indx += 1
+                # Count number of occurences for each (e1, relation)
+                if relation2id[relation] not in left_entity:
+                    left_entity[relation2id[relation]] = {}
+                if entity2id[e1] not in left_entity[relation2id[relation]]:
+                    left_entity[relation2id[relation]][entity2id[e1]] = 0
+                left_entity[relation2id[relation]][entity2id[e1]] += 1 #(e1, relation)左连接的数量
+
+                # Count number of occurences for each (relation, e2)
+                if relation2id[relation] not in right_entity:
+                    right_entity[relation2id[relation]] = {}
+                if entity2id[e2] not in right_entity[relation2id[relation]]:
+                    right_entity[relation2id[relation]][entity2id[e2]] = 0
+                right_entity[relation2id[relation]][entity2id[e2]] += 1 #(relation, e2)右连接的数量
+        elif cubic_from_reverse:
+            org_file = path + reverse_load_data
+            if os.path.exists(org_file): #use reverse data
+                with open(org_file, 'rb') as handle:
+                    reverse_load_data_pickle = pickle.load(handle)
+                    _, _, _, _, _, headTailSelector, _,\
+                    reverse_train_cb_data,_,_,cb_headTailSelector,_ = reverse_load_data_pickle
+                    reverse_train_cb_triples, _ = reverse_train_cb_data
+                for e1_id, rel_id, e2_id in reverse_train_cb_triples:
+                    train_cb_triples.append((e2_id, rel_id, e1_id)) #id均与reverse相同
+                    unique_cb_entities.add(id2cd_entity[e1_id])
+                    unique_cb_entities.add(id2cd_entity[e2_id])
+                    
+                    cb_rows.append(e1_id)
+                    cb_cols.append(e2_id)
+                    if is_unweigted:
+                        cb_data.append(1)
+                    else:
+                        cb_data.append(rel_id)                   
+
+                    if indx % 100== 0:
+                        print("     Gen cubic ent ():",e2_id, rel_id, e1_id)
+            for line in train_triples:
+                e1_id, rel_id, e2_id = line#读出为实体、关系的名字，需转为数字id
+                e1 = id2entity[e1_id]
+                relation = id2relation[rel_id]
+                e2 = id2entity[e2_id]
                 indx += 1
                 # Count number of occurences for each (e1, relation)
                 if relation2id[relation] not in left_entity:
@@ -314,13 +355,20 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
 
     left_entity_avg = {}
     for i in range(len(relation2id)):
-        left_entity_avg[i] = sum(
+        if i in left_entity.keys():
+            left_entity_avg[i] = sum(
             left_entity[i].values()) * 1.0 / len(left_entity[i]) #每个关系在左连接中的平均数（关系i连接每种源实体的平均数量）
+        else:
+            left_entity_avg[i] = 1e-5
 
     right_entity_avg = {}
-    for i in range(len(relation2id)):
-        right_entity_avg[i] = sum(
+    for i in range(len(relation2id)):        
+        if i in right_entity.keys():
+            right_entity_avg[i] = sum(
             right_entity[i].values()) * 1.0 / len(right_entity[i]) #每个关系在右连接中的平均数（关系i连接每种目标实体的平均数量）
+        else:
+            right_entity_avg[i] = 1e-5
+
 
     headTailSelector = {}
     for i in range(len(relation2id)):

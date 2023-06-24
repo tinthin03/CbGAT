@@ -89,20 +89,21 @@ def e2wid(entity, id_map_file = args.data + "/e2wid.pickle"):
 
     return wiki_id
 
-file_eid = args.data + "/eid2wid.pickle"
-file_e = args.data + "/e2wid.pickle"
-if not os.path.exists(file_eid):
-    eid2wid_map,e2wid_map = generate_id_map(args.data +"entity2id.txt",args.data +"fb2w.nt",file_eid,file_e)
-    with open(file_eid, 'wb') as handle:
-        pickle.dump(eid2wid_map, handle,
-                    protocol=pickle.HIGHEST_PROTOCOL) 
-    with open(file_e, 'wb') as handle:
-        pickle.dump(e2wid_map, handle,
-                    protocol=pickle.HIGHEST_PROTOCOL)
-else:
-    print("Loading Generated eid2wid,e2wid  >>>")
-    eid2wid_map = pickle.load(open(file_eid,'rb'))
-    e2wid_map = pickle.load(open(file_e,'rb'))
+def wiki():
+    file_eid = args.data + "/eid2wid.pickle"
+    file_e = args.data + "/e2wid.pickle"
+    if not os.path.exists(file_eid):
+        eid2wid_map,e2wid_map = generate_id_map(args.data +"entity2id.txt",args.data +"fb2w.nt",file_eid,file_e)
+        with open(file_eid, 'wb') as handle:
+            pickle.dump(eid2wid_map, handle,
+                        protocol=pickle.HIGHEST_PROTOCOL) 
+        with open(file_e, 'wb') as handle:
+            pickle.dump(e2wid_map, handle,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+    else:
+        print("Loading Generated eid2wid,e2wid  >>>")
+        eid2wid_map = pickle.load(open(file_eid,'rb'))
+        e2wid_map = pickle.load(open(file_e,'rb'))
 
 #print(e2wid('02vqpx8'))
 #print(e2wid('05gp3x'))

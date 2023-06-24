@@ -3,7 +3,7 @@ from collections import defaultdict
 import rotate_compare_cppext
 import rotate_dist_cppext
 import torch
-
+from main import reverse
 from reasoning_model import ReasoningModel
 
 
@@ -43,7 +43,9 @@ class RotatE(ReasoningModel):#内含一个静态的c++类库，存放了rotateE�
             self.embed_range = (self.gamma + 2.0) / self.embed_dim
             self.entity_embed = torch.tensor(numpy.load(f"{pretrained}/entity_embedding.npy"))
             relation_embed = torch.tensor(numpy.load(f"{pretrained}/relation_embedding.npy"))
-            self.relation_embed = (torch.cat([relation_embed, -relation_embed], dim=0))
+            if reverse:self.relation_embed = (torch.cat([-relation_embed, relation_embed], dim=0))
+            else:
+                self.relation_embed = (torch.cat([relation_embed, -relation_embed], dim=0))
 
         # pi = 3.141592653589793238462643383279
         # self.relation_embed = self.relation_embed / self.embed_range * pi

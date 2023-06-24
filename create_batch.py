@@ -126,6 +126,8 @@ class Corpus:
         else:
             last_iter_size = len(self.train_indices) - \
                 self.batch_size * iter_num
+            print(f"{len(self.train_indices)} - {self.batch_size} * {iter_num}")
+            print(f"{last_iter_size}")
             self.batch_indices = np.empty(
                 (last_iter_size * (self.invalid_valid_ratio + 1), 3)).astype(np.int32)
             self.batch_values = np.empty(

@@ -27,7 +27,24 @@ import pickle
 
 #model_type = 'transE'
 model_type = 'rotatE'
-inductive = False
+inductive = False#False
+exp = "fb15"
+#exp = "wn18"
+#exp = "umls"
+# exp = "ilpc"
+# exp = "ilpc-large"
+
+inv_relatation = False #data & reverse data
+
+reverse = False # reverse data
+
+
+if reverse:suf = '-reverse'
+elif inv_relatation :suf = '-inv'
+else: suf = ''
+
+if exp == "ilpc" or exp == "ilpc-large":
+    inductive = True
 
 def parse_args_wn18():
     args = argparse.ArgumentParser()
@@ -102,25 +119,27 @@ def parse_args():
     if model_type=='rotatE':
         if inductive:
             args.add_argument("-data", "--data",
-                        default="./data/FB15k-237-rotate/inductive/", help="data directory")  #FB15k-237-rotate/inductive/
+                        default=f"./data/FB15k-237-rotate{suf}/inductive/", help="data directory")  #FB15k-237-rotate/inductive/
             args.add_argument("-outfolder", "--output_folder",
-                      default="./checkpoints/fb/out-rotate-inductive/", help="Folder name to save the models.") #   /out-rotate-inductive/
+                    default=f"./checkpoints/fb/out-rotate{suf}-inductive/", help="Folder name to save the models.") #   /out-rotate-inductive/
         else:            
             args.add_argument("-data", "--data",
-                        default="./data/FB15k-237-rotate/", help="data directory")  #FB15k-237-rotate/inductive/
+                        default=f"./data/FB15k-237-rotate{suf}/", help="data directory")  #FB15k-237-rotate/inductive/
             args.add_argument("-outfolder", "--output_folder",
-                      default="./checkpoints/fb/out-rotate/", help="Folder name to save the models.") #   /out-rotate-inductive/
+                    default=f"./checkpoints/fb/out-rotate{suf}/", help="Folder name to save the models.") #   /out-rotate-inductive/ #XXX inv200  -dim100
+        
     else:
         if inductive:
             args.add_argument("-data", "--data",
-                            default="./data/FB15k-237/inductive2/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
+                            default=f"./data/FB15k-237{suf}/inductive2/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
             args.add_argument("-outfolder", "--output_folder",
-                            default="./checkpoints/fb/out-inductive2/", help="Folder name to save the models.") #out-inductive/ -rotate
+                            default=f"./checkpoints/fb/out{suf}-inductive2/", help="Folder name to save the models.") #out-inductive/ -rotate
         else:
             args.add_argument("-data", "--data",
-                            default="./data/FB15k-237/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
+                            default=f"./data/FB15k-237{suf}/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
             args.add_argument("-outfolder", "--output_folder",
-                            default="./checkpoints/fb/out/", help="Folder name to save the models.") #out-inductive/ -rotate
+                            default=f"./checkpoints/fb/out{suf}/", help="Folder name to save the models.") #out-inductive/ -rotate
+        
     args.add_argument("-e_g", "--epochs_gat", type=int,
                       default=3000, help="Number of epochs")
     args.add_argument("-e_c", "--epochs_conv", type=int,
@@ -130,7 +149,87 @@ def parse_args():
     args.add_argument("-w_conv", "--weight_decay_conv", type=float,
                       default=1e-6, help="L2 reglarization for conv")
     args.add_argument("-pre_emb", "--pretrained_emb", type=bool,
-                      default=True, help="Use pretrained embeddings")
+                      default=(not reverse) and (not inv_relatation), help="Use pretrained embeddings")
+    args.add_argument("-emb_size", "--embedding_size", type=int,
+                      default=50, help="Size of embeddings (if pretrained not used)")
+    args.add_argument("-l", "--lr", type=float, default=1e-3)
+    args.add_argument("-g2hop", "--get_2hop", type=bool, default=False)
+    args.add_argument("-u2hop", "--use_2hop", type=bool, default=False)
+    args.add_argument("-p2hop", "--partial_2hop", type=bool, default=False)
+
+    # arguments for GAT
+    args.add_argument("-b_gat", "--batch_size_gat", type=int,
+                      default=10000, help="Batch size for GAT")
+    args.add_argument("-neg_s_gat", "--valid_invalid_ratio_gat", type=int,
+                      default=2, help="Ratio of valid to invalid triples for GAT training")
+    args.add_argument("-drop_GAT", "--drop_GAT", type=float,
+                      default=0.3, help="Dropout probability for SpGAT layer")
+    args.add_argument("-alpha", "--alpha", type=float,
+                      default=0.2, help="LeakyRelu alphs for SpGAT layer")
+    if inv_relatation:
+        args.add_argument("-out_dim", "--entity_out_dim", type=int, nargs='+',
+                        default=[50, 100], help="Entity output embedding dimensions")
+    else:
+        args.add_argument("-out_dim", "--entity_out_dim", type=int, nargs='+',
+                      default=[100, 200], help="Entity output embedding dimensions")
+    args.add_argument("-h_gat", "--nheads_GAT", type=int, nargs='+',
+                      default=[2, 2], help="Multihead attention SpGAT")
+    args.add_argument("-margin", "--margin", type=float,
+                      default=1, help="Margin used in hinge loss")
+
+    # arguments for convolution network
+    args.add_argument("-b_conv", "--batch_size_conv", type=int,
+                      default=128, help="Batch size for conv")
+    args.add_argument("-alpha_conv", "--alpha_conv", type=float,
+                      default=0.2, help="LeakyRelu alphas for conv layer")
+    args.add_argument("-neg_s_conv", "--valid_invalid_ratio_conv", type=int, default=40,
+                      help="Ratio of valid to invalid triples for convolution training")
+    args.add_argument("-o", "--out_channels", type=int, default=50,
+                      help="Number of output channels in conv layer")
+    args.add_argument("-drop_conv", "--drop_conv", type=float,
+                      default=0.3, help="Dropout probability for convolution layer")
+
+    args = args.parse_args()
+
+    return args
+
+
+def parse_args_umls():
+    args = argparse.ArgumentParser()
+    
+    # network arguments
+    if model_type=='rotatE':
+        if inductive:
+            args.add_argument("-data", "--data",
+                        default="./data/umls-rotate/inductive/", help="data directory")  #FB15k-237-rotate/inductive/
+            args.add_argument("-outfolder", "--output_folder",
+                      default="./checkpoints/umls/out-rotate-inductive/", help="Folder name to save the models.") #   /out-rotate-inductive/
+        else:            
+            args.add_argument("-data", "--data",
+                        default="./data/umls-rotate/", help="data directory")  #FB15k-237-rotate/inductive/
+            args.add_argument("-outfolder", "--output_folder",
+                      default="./checkpoints/umls/out-rotate/", help="Folder name to save the models.") #   /out-rotate-inductive/
+    else:
+        if inductive:
+            args.add_argument("-data", "--data",
+                            default="./data/umls/inductive/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
+            args.add_argument("-outfolder", "--output_folder",
+                            default="./checkpoints/umls/out-inductive/", help="Folder name to save the models.") #out-inductive/ -rotate
+        else:
+            args.add_argument("-data", "--data",
+                            default="./data/umls/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
+            args.add_argument("-outfolder", "--output_folder",
+                            default="./checkpoints/umls/out/", help="Folder name to save the models.") #out-inductive/ -rotate
+    args.add_argument("-e_g", "--epochs_gat", type=int,
+                      default=3000, help="Number of epochs")
+    args.add_argument("-e_c", "--epochs_conv", type=int,
+                      default=200, help="Number of epochs")
+    args.add_argument("-w_gat", "--weight_decay_gat", type=float,
+                      default=1e-5, help="L2 reglarization for gat")
+    args.add_argument("-w_conv", "--weight_decay_conv", type=float,
+                      default=1e-6, help="L2 reglarization for conv")
+    args.add_argument("-pre_emb", "--pretrained_emb", type=bool,
+                      default=False, help="Use pretrained embeddings")
     args.add_argument("-emb_size", "--embedding_size", type=int,
                       default=50, help="Size of embeddings (if pretrained not used)")
     args.add_argument("-l", "--lr", type=float, default=1e-3)
@@ -169,11 +268,170 @@ def parse_args():
     args = args.parse_args()
 
     return args
-#args = parse_args()
-args = parse_args_wn18()
+
+def parse_args_ilpc():
+    args = argparse.ArgumentParser()
+    
+    # network arguments
+    if model_type=='rotatE':
+        if inductive:
+            args.add_argument("-data", "--data",
+                        default="./data/ilpc-small-rotate/", help="data directory")  #FB15k-237-rotate/inductive/
+            args.add_argument("-outfolder", "--output_folder",
+                      default="./checkpoints/ilpc/ilpc-small-rotate/", help="Folder name to save the models.") #   /out-rotate-inductive/
+        else:            
+            args.add_argument("-data", "--data",
+                        default="./data/ilpc-small-rotate/transductive/", help="data directory")  #FB15k-237-rotate/inductive/
+            args.add_argument("-outfolder", "--output_folder",
+                      default="./checkpoints/ilpc/ilpc-small-rotate-transductive/", help="Folder name to save the models.") #   /out-rotate-inductive/
+    else:
+        if inductive:
+            args.add_argument("-data", "--data",
+                            default="./data/ilpc-small/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
+            args.add_argument("-outfolder", "--output_folder",
+                            default="./checkpoints/ilpc/ilpc-small/", help="Folder name to save the models.") #out-inductive/ -rotate
+        else:
+            args.add_argument("-data", "--data",
+                            default="./data/ilpc-small/transductive/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
+            args.add_argument("-outfolder", "--output_folder",
+                            default="./checkpoints/ilpc/ilpc-small-transductive/", help="Folder name to save the models.") #out-inductive/ -rotate
+    args.add_argument("-e_g", "--epochs_gat", type=int,
+                      default=3000, help="Number of epochs")
+    args.add_argument("-e_c", "--epochs_conv", type=int,
+                      default=200, help="Number of epochs")
+    args.add_argument("-w_gat", "--weight_decay_gat", type=float,
+                      default=1e-5, help="L2 reglarization for gat")
+    args.add_argument("-w_conv", "--weight_decay_conv", type=float,
+                      default=1e-6, help="L2 reglarization for conv")
+    args.add_argument("-pre_emb", "--pretrained_emb", type=bool,
+                      default=False, help="Use pretrained embeddings")
+    args.add_argument("-emb_size", "--embedding_size", type=int,
+                      default=50, help="Size of embeddings (if pretrained not used)")
+    args.add_argument("-l", "--lr", type=float, default=1e-3)
+    args.add_argument("-g2hop", "--get_2hop", type=bool, default=False)
+    args.add_argument("-u2hop", "--use_2hop", type=bool, default=False)
+    args.add_argument("-p2hop", "--partial_2hop", type=bool, default=False)
+
+    # arguments for GAT
+    args.add_argument("-b_gat", "--batch_size_gat", type=int,
+                      default=3000, help="Batch size for GAT")
+    args.add_argument("-neg_s_gat", "--valid_invalid_ratio_gat", type=int,
+                      default=2, help="Ratio of valid to invalid triples for GAT training")
+    args.add_argument("-drop_GAT", "--drop_GAT", type=float,
+                      default=0.3, help="Dropout probability for SpGAT layer")
+    args.add_argument("-alpha", "--alpha", type=float,
+                      default=0.2, help="LeakyRelu alphs for SpGAT layer")
+    args.add_argument("-out_dim", "--entity_out_dim", type=int, nargs='+',
+                      default=[100, 200], help="Entity output embedding dimensions")
+    args.add_argument("-h_gat", "--nheads_GAT", type=int, nargs='+',
+                      default=[2, 2], help="Multihead attention SpGAT")
+    args.add_argument("-margin", "--margin", type=float,
+                      default=1, help="Margin used in hinge loss")
+
+    # arguments for convolution network
+    args.add_argument("-b_conv", "--batch_size_conv", type=int,
+                      default=128, help="Batch size for conv")
+    args.add_argument("-alpha_conv", "--alpha_conv", type=float,
+                      default=0.2, help="LeakyRelu alphas for conv layer")
+    args.add_argument("-neg_s_conv", "--valid_invalid_ratio_conv", type=int, default=40,
+                      help="Ratio of valid to invalid triples for convolution training")
+    args.add_argument("-o", "--out_channels", type=int, default=50,
+                      help="Number of output channels in conv layer")
+    args.add_argument("-drop_conv", "--drop_conv", type=float,
+                      default=0.3, help="Dropout probability for convolution layer")
+
+    args = args.parse_args()
+
+    return args
+
+def parse_args_ilpc_large():
+    args = argparse.ArgumentParser()
+    
+    # network arguments
+    if model_type=='rotatE':
+        if inductive:
+            args.add_argument("-data", "--data",
+                        default="./data/ilpc-large-rotate/", help="data directory")  #FB15k-237-rotate/inductive/
+            args.add_argument("-outfolder", "--output_folder",
+                      default="./checkpoints/ilpc/ilpc-large-rotate/", help="Folder name to save the models.") #   /out-rotate-inductive/
+        else:            
+            args.add_argument("-data", "--data",
+                        default="./data/ilpc-large-rotate/transductive/", help="data directory")  #FB15k-237-rotate/inductive/
+            args.add_argument("-outfolder", "--output_folder",
+                      default="./checkpoints/ilpc/ilpc-large-rotate-transductive/", help="Folder name to save the models.") #   /out-rotate-inductive/
+    else:
+        if inductive:
+            args.add_argument("-data", "--data",
+                            default="./data/ilpc-large/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
+            args.add_argument("-outfolder", "--output_folder",
+                            default="./checkpoints/ilpc/ilpc-large/", help="Folder name to save the models.") #out-inductive/ -rotate
+        else:
+            args.add_argument("-data", "--data",
+                            default="./data/ilpc-large/transductive/", help="data directory")#FB15k-237-direct-pretr  inductive/  -rotate
+            args.add_argument("-outfolder", "--output_folder",
+                            default="./checkpoints/ilpc/ilpc-large-transductive/", help="Folder name to save the models.") #out-inductive/ -rotate
+    args.add_argument("-e_g", "--epochs_gat", type=int,
+                      default=3000, help="Number of epochs")
+    args.add_argument("-e_c", "--epochs_conv", type=int,
+                      default=200, help="Number of epochs")
+    args.add_argument("-w_gat", "--weight_decay_gat", type=float,
+                      default=1e-5, help="L2 reglarization for gat")
+    args.add_argument("-w_conv", "--weight_decay_conv", type=float,
+                      default=1e-6, help="L2 reglarization for conv")
+    args.add_argument("-pre_emb", "--pretrained_emb", type=bool,
+                      default=False, help="Use pretrained embeddings")
+    args.add_argument("-emb_size", "--embedding_size", type=int,
+                      default=50, help="Size of embeddings (if pretrained not used)")
+    args.add_argument("-l", "--lr", type=float, default=1e-3)
+    args.add_argument("-g2hop", "--get_2hop", type=bool, default=False)
+    args.add_argument("-u2hop", "--use_2hop", type=bool, default=False)
+    args.add_argument("-p2hop", "--partial_2hop", type=bool, default=False)
+
+    # arguments for GAT
+    args.add_argument("-b_gat", "--batch_size_gat", type=int,
+                      default=5000, help="Batch size for GAT")
+    args.add_argument("-neg_s_gat", "--valid_invalid_ratio_gat", type=int,
+                      default=2, help="Ratio of valid to invalid triples for GAT training")
+    args.add_argument("-drop_GAT", "--drop_GAT", type=float,
+                      default=0.3, help="Dropout probability for SpGAT layer")
+    args.add_argument("-alpha", "--alpha", type=float,
+                      default=0.2, help="LeakyRelu alphs for SpGAT layer")
+    args.add_argument("-out_dim", "--entity_out_dim", type=int, nargs='+',
+                      default=[100, 200], help="Entity output embedding dimensions")
+    args.add_argument("-h_gat", "--nheads_GAT", type=int, nargs='+',
+                      default=[2, 2], help="Multihead attention SpGAT")
+    args.add_argument("-margin", "--margin", type=float,
+                      default=1, help="Margin used in hinge loss")
+
+    # arguments for convolution network
+    args.add_argument("-b_conv", "--batch_size_conv", type=int,
+                      default=128, help="Batch size for conv")
+    args.add_argument("-alpha_conv", "--alpha_conv", type=float,
+                      default=0.2, help="LeakyRelu alphas for conv layer")
+    args.add_argument("-neg_s_conv", "--valid_invalid_ratio_conv", type=int, default=40,
+                      help="Ratio of valid to invalid triples for convolution training")
+    args.add_argument("-o", "--out_channels", type=int, default=50,
+                      help="Number of output channels in conv layer")
+    args.add_argument("-drop_conv", "--drop_conv", type=float,
+                      default=0.3, help="Dropout probability for convolution layer")
+
+    args = args.parse_args()
+
+    return args
+
+if exp == 'fb15':
+    args = parse_args()
+elif exp == 'wn18':
+    args = parse_args_wn18()
+elif exp == 'umls':
+    args = parse_args_umls()
+elif exp == 'ilpc':
+    args = parse_args_ilpc()
+elif exp == 'ilpc-large':
+    args = parse_args_ilpc_large()
 # %%
 
-inv_relatation = False
+cubic_from_reverse = False#True
 
 def load_data(args):
     #train_data：(train_triples, train_adjacency_mat)，即(三元组id， (rows, cols, data)),其中三元组id的每行为 (entity2id[e1], relation2id[relation], entity2id[e2])
@@ -188,10 +446,11 @@ def load_data(args):
             load_data_pickle = pickle.load(handle)
             train_data, validation_data, test_data, entity2id, relation2id, headTailSelector, unique_entities_train,\
             train_cb_data,cb_entity2id,cb_relation2id,cb_headTailSelector,unique_cb_entities = load_data_pickle
+                   
     else:
         train_data, validation_data, test_data, entity2id, relation2id, headTailSelector, unique_entities_train,\
             train_cb_data,cb_entity2id,cb_relation2id,cb_headTailSelector,\
-            unique_cb_entities = build_cubic_data(args.data, is_unweigted=False, directed=(not inv_relatation))
+            unique_cb_entities = build_cubic_data(args.data, is_unweigted=False, directed=(not inv_relatation),cubic_from_reverse=cubic_from_reverse,reverse_load_data = "reverse_load_data_pickle.pickle")
 
         load_data_pickle = (train_data, validation_data, test_data, entity2id, relation2id, headTailSelector, unique_entities_train,\
             train_cb_data,cb_entity2id,cb_relation2id,cb_headTailSelector,unique_cb_entities)
@@ -298,8 +557,7 @@ print("Initial cb_entity dimensions {} , cb_relation dimensions {}".format(
 print("Initial entity dimensions {} , relation dimensions {}".format(
     entity_embeddings.size(), relation_embeddings.size()))#当纯随机时，都是50维（args决定）。但加入pretrain时，为100维。
 # %%
-#model_type = 'transE'
-model_type = 'rotatE'
+
 cos = torch.nn.CosineSimilarity(dim=0,eps=1e-12)#(1,-1)eps小一些，可以体高精度
 def infer(h,r,model = 'transE'):
     if model=='transE':
@@ -543,7 +801,7 @@ def train_gat_cb(args):
     cb_final_relation_embeddings = cb_model_gat.final_relation_embeddings#得到GAT模型的最终嵌入
 
     #print("train_gat_cb final_entity_embeddings.shape,final_relation_embeddings.shape,cb_relation_embeddings.shape",final_entity_embeddings.shape,final_relation_embeddings.shape,cb_relation_embeddings.shape)
-     
+    divc = torch.cuda.current_device()
     if CUDA:
         model_gat.cuda()
         cb_model_gat.cuda()
@@ -551,7 +809,8 @@ def train_gat_cb(args):
             print("Use", torch.cuda.device_count(), 'gpus')
             model_gat = nn.DataParallel(model_gat, device_ids=[torch.cuda.current_device()])
             cb_model_gat = nn.DataParallel(cb_model_gat, device_ids=[torch.cuda.current_device()])
-
+        model_gat  = model_gat.to(divc)
+        cb_model_gat  = cb_model_gat.to(divc)
     optimizer = torch.optim.Adam(
         model_gat.parameters(), lr=args.lr, weight_decay=args.weight_decay_gat)
     cb_optimizer = torch.optim.Adam(
@@ -625,13 +884,20 @@ def train_gat_cb(args):
         cb_model_gat.train()
         start_time = time.time()
         epoch_loss = []
-
-        if len(Corpus_.train_indices) % args.batch_size_gat == 0:
-            num_iters_per_epoch = len(
-                Corpus_.train_indices) // args.batch_size_gat
+        if len(Corpus_.train_indices) < len(cb_Corpus_.train_indices):
+            if len(Corpus_.train_indices) % args.batch_size_gat == 0:
+                num_iters_per_epoch = len(
+                    Corpus_.train_indices) // args.batch_size_gat
+            else:
+                num_iters_per_epoch = (
+                    len(Corpus_.train_indices) // args.batch_size_gat) + 1
         else:
-            num_iters_per_epoch = (
-                len(Corpus_.train_indices) // args.batch_size_gat) + 1
+            if len(cb_Corpus_.train_indices) % args.batch_size_gat == 0:
+                num_iters_per_epoch = len(
+                    cb_Corpus_.train_indices) // args.batch_size_gat
+            else:
+                num_iters_per_epoch = (
+                    len(cb_Corpus_.train_indices) // args.batch_size_gat) + 1
         print("\n num_iters_per_epoch ==", num_iters_per_epoch)
         print("\n len(Corpus_.train_indices) ==", len(Corpus_.train_indices))
         print("\n len(cb_Corpus_.train_indices) ==", len(cb_Corpus_.train_indices))
@@ -645,11 +911,11 @@ def train_gat_cb(args):
             print("\n len(cb_train_indices) ==", len(cb_train_indices))
             if CUDA:
                 train_indices = Variable(
-                    torch.LongTensor(train_indices)).cuda()
-                train_values = Variable(torch.FloatTensor(train_values)).cuda()
+                    torch.LongTensor(train_indices)).cuda()#.to(divc)
+                train_values = Variable(torch.FloatTensor(train_values)).cuda()#.to(divc)
                 cb_train_indices = Variable(
-                    torch.LongTensor(cb_train_indices)).cuda()
-                cb_train_values = Variable(torch.FloatTensor(cb_train_values)).cuda()
+                    torch.LongTensor(cb_train_indices)).cuda()#.to(divc)
+                cb_train_values = Variable(torch.FloatTensor(cb_train_values)).cuda()#.to(divc)
 
             else:
                 train_indices = Variable(torch.LongTensor(train_indices))
