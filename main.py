@@ -34,7 +34,7 @@ exp = "fb15"
 # exp = "ilpc"
 # exp = "ilpc-large"
 
-inv_relatation = False #data & reverse data
+inv_relatation = True #data & reverse data
 
 reverse = False # reverse data
 

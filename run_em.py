@@ -90,23 +90,23 @@ dataset = load_dataset(f"{DATA_DIR}",exp=exp)#键值为['train', 'valid', 'test'
 #对每个谓词r，抽样若干可能路径作为规则，length_time表示每个三元组各长度规则的抽样数目,对每个r抽样用到num_samples个三元组(默认1000个)
 #并评估规则的先验权重
 
-# rule_sample.use_graph(dataset_graph(dataset, 'train'))
-# for r in range(start, dataset['R'], hop):#遍历关系r，抽样其相关的三元组知识,并抽取可能的规则路径
-#     # Usage: rule_sample.sample(relation, dict: rule_len -> num_per_sample, num_samples, ...)
-#     num_tr = dataset['T'][int(r)]
-#     num_samples = 1000+2*num_tr
-#     #num_samples = 1000
-#     #print("Predicate",r,"has",num_tr,"tripples,sample rules",num_samples,"times from its tripples.")
-#     #rules = rule_sample.sample(r, {1: 3, 2: 30, 3: 30, 4: 40, 5: 60, 6: 100}, num_samples, num_threads=12, samples_per_print=100)
-#     if max_rule_length == 4:
-#         rules = rule_sample.sample(r, {1: 3, 2: 30, 3: 30, 4: 30}, num_samples, num_threads=12, samples_per_print=100)
-#     elif max_rule_length == 3:
-#         rules = rule_sample.sample(r, {1: 3, 2: 30, 3: 30}, num_samples, num_threads=12, samples_per_print=100)
-#     elif max_rule_length == 2:
-#         rules = rule_sample.sample(r, {1: 3, 2: 30}, num_samples, num_threads=12, samples_per_print=100)
+rule_sample.use_graph(dataset_graph(dataset, 'train'))
+for r in range(start, dataset['R'], hop):#遍历关系r，抽样其相关的三元组知识,并抽取可能的规则路径
+    # Usage: rule_sample.sample(relation, dict: rule_len -> num_per_sample, num_samples, ...)
+    num_tr = dataset['T'][int(r)]
+    num_samples = 1000+2*num_tr
+    #num_samples = 1000
+    #print("Predicate",r,"has",num_tr,"tripples,sample rules",num_samples,"times from its tripples.")
+    #rules = rule_sample.sample(r, {1: 3, 2: 30, 3: 30, 4: 40, 5: 60, 6: 100}, num_samples, num_threads=12, samples_per_print=100)
+    if max_rule_length == 4:
+        rules = rule_sample.sample(r, {1: 3, 2: 30, 3: 30, 4: 30}, num_samples, num_threads=12, samples_per_print=100)
+    elif max_rule_length == 3:
+        rules = rule_sample.sample(r, {1: 3, 2: 30, 3: 30}, num_samples, num_threads=12, samples_per_print=100)
+    elif max_rule_length == 2:
+        rules = rule_sample.sample(r, {1: 3, 2: 30}, num_samples, num_threads=12, samples_per_print=100)
 
-#     print("Sample",len(rules),"rules.")
-#     rule_sample.save(rules, f"{DATA_DIR}/Rules{str(max_rule_length)}++/rules_{r}.txt")#抽样样本集
+    print("Sample",len(rules),"rules.")
+    rule_sample.save(rules, f"{DATA_DIR}/Rules{str(max_rule_length)}++/rules_{r}.txt")#抽样样本集
 
 
 
