@@ -28,11 +28,11 @@ import pickle
 #model_type = 'transE'
 model_type = 'rotatE'
 inductive = False#False
-exp = "fb15"
-#exp = "wn18"
-#exp = "umls"
+# exp = "fb15"
+# exp = "wn18"
+# exp = "umls"
 # exp = "ilpc"
-# exp = "ilpc-large"
+exp = "ilpc-large"
 
 inv_relatation = True #data & reverse data
 
