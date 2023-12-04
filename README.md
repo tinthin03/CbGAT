@@ -1,9 +1,9 @@
 
 #### Introduction ####
 
-RNN-based methods tend to prioritize the modeling of predicate sequences while neglecting intermediate entities.Here we observe that these neglects can lead to two types of disorder phenomena.
+RNN-based methods tend to prioritize the modeling of predicate sequences while neglecting intermediate entities.Here we observe that these neglects can lead to bias phenomena.
 
-![The disorder phenomena of RNN-based models](https://github.com/tinthin03/CbGAT/blob/master/disorder.jpg "The disorder phenomena of RNN-based models")
+![The disorder phenomena of RNN-based models](https://github.com/tinthin03/CbGAT/blob/master/bias.jpg "The ambiguity bias of RNN-based models")
 
 
 Considering the limitations of RNNs in modeling mechanisms, this paper proposes a novel framework for logic rule learning based on Graph Neural Networks (GNNs), known as the $\underline{C}u\underline{b}ic \space \underline{G}raph \space \underline{At}tention \space Network$ (CbGAT).
