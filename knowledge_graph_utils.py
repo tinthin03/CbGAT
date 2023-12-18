@@ -48,7 +48,7 @@ def load_dataset(DATA_DIR,exp = "fb"):
         if item == 'train':
             with open(f"{DATA_DIR}/{item}.txt") as fin:
                 for line in fin:
-                    #h, r, t = line.strip().split('\t')
+
                     h, r, t = line.strip().split()
                     h, r, t = entity2id[h], relation2id[r], entity2id[t]
 
@@ -63,20 +63,17 @@ def load_dataset(DATA_DIR,exp = "fb"):
         else:
             with open(f"{DATA_DIR}/{item}.txt") as fin:
                 for line in fin:
-                    #h, r, t = line.strip().split('\t')
+
                     h, r, t = line.strip().split()
                     h, r, t = entity2id[h], relation2id[r], entity2id[t]
 
                     edges.append([h, r, t])
                     edges.append([t, r + mov, h])
-                    # ret['Rh'][int(r)].add(h)
-                    # ret['Rt'][int(r)].add(t)
-                    # ret['Rh'][int(r + mov)].add(t)
-                    # ret['Rt'][int(r + mov)].add(h)
+
 
         ret[item] = edges
 
-    return ret#键值为['train', 'valid', 'test']的字典，每个字典的key是三元组(h,r,t)，及反三元组(t,r+mov,h)=的list。将r加上位移表示其逆关系，用于无向图？
+    return ret
 
 
 def build_graph(edges, E, R):
@@ -140,18 +137,9 @@ if __name__ == "__main__":
         trR = dict()
         elist = []
         rlist = []
-        # for eid in range(len(id2entity_em)):
-        #     neid = entity2id[id2entity_em[eid]]
-        #     trE[eid] = neid
-        #     elist.append(neid)
-        # for rid in range(len(id2relation_em)):
-        #     nrid = relation2id[id2entity_em[rid]]
-        #     trE[rid] = nrid
-        #     rlist.append(nrid)
+
 
         for eid in range(len(id2entity)):
-            # print(eid)
-            # print(id2entity[eid])
             neid = entity2id_em[id2entity[eid]]
             trE[eid] = neid#id2emid
             elist.append(neid)#id2emid
