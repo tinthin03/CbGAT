@@ -19,7 +19,6 @@ with open(args.data + "/relation2id.txt", "r", encoding="utf-8") as f:
         r_id = parts[1]
         r2id[r] = r_id
 
-#从train中查找谓词r对应的head、tail的wikiID
 def gen_predicate_sample(sample_file = args.data + "/train.txt",r_num = 237):
     r_sample = {}    
     with open(sample_file, "r", encoding="utf-8") as f:
