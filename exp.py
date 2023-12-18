@@ -1,8 +1,5 @@
 import os,pickle
 
-# filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx300-tr9-noinv-R4+.out"
-# #filename="cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx200-tr9-noinv-R4+.out"
-# filename="rot-cos-path1-disbuf-grapht_ind-rely_gen_one-l1000x0.1mx330-tr9-noinv-R4+.out"
 def analysis(filename,compTnum = None,R = 237,roundnum = 10):
     with open(filename) as f:
         lines = f.readlines()
@@ -13,8 +10,8 @@ def analysis(filename,compTnum = None,R = 237,roundnum = 10):
     TH1 = dict()
     Tnum_dict = dict()
     
-    Vsmp = 0 #样本数
-    Tsmp = 0 #样本数
+    Vsmp = 0 
+    Tsmp = 0
     for i in range(roundnum):
         rule_quality[i] = 0
         Vmrr[i] = 0
@@ -22,7 +19,6 @@ def analysis(filename,compTnum = None,R = 237,roundnum = 10):
         VH1[i] = 0
         TH1[i] = 0
 
-    #各回合的rule_quality
     rind = 0
     count_ind = 0
     tmp_qual = 0
