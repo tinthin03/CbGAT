@@ -13,59 +13,58 @@ class Corpus:
 
         # Converting to sparse tensor
         adj_indices = torch.LongTensor(
-            [train_data[1][0], train_data[1][1]])  # rows and columns  [e2,e1]，前者是tail，后者是head
-        adj_values = torch.LongTensor(train_data[1][2]) #关系r的id（weigted）或者1（is_unweigted）
+            [train_data[1][0], train_data[1][1]])  # rows and columns  [e2,e1]
+        adj_values = torch.LongTensor(train_data[1][2]) 
         self.train_adj_matrix = (adj_indices, adj_values)# ((e2,e1),r) = ((t,h),r)
 
         # adjacency matrix is needed for train_data only, as GAT is trained for
         # training data
-        self.validation_triples = validation_data[0] #是一个三元组id，(e1,r,e2)
-        self.test_triples = test_data[0]#是一个三元组id，(e1,r,e2)
+        self.validation_triples = validation_data[0] #(e1,r,e2)
+        self.test_triples = test_data[0]#(e1,r,e2)
 
-        self.headTailSelector = headTailSelector  # for selecting random entities， #表示关系尾部链接实体的平均数量与头部链接实体的平均数量之比。
+        self.headTailSelector = headTailSelector  # for selecting random entities
         self.entity2id = entity2id
         self.id2entity = {v: k for k, v in self.entity2id.items()}
         self.relation2id = relation2id
         self.id2relation = {v: k for k, v in self.relation2id.items()}
         self.batch_size = batch_size
         # ratio of valid to invalid samples per batch for training ConvKB Model
-        self.invalid_valid_ratio = int(valid_to_invalid_samples_ratio) #正负样本比例
+        self.invalid_valid_ratio = int(valid_to_invalid_samples_ratio) 
         if(get_2hop):
-            self.graph = self.get_graph() #返回字典形式表示的图，每项表示一个三元组：graph[source][target] = value
-            self.node_neighbors_2hop = self.get_further_neighbors() #当考虑2跳时的图
+            self.graph = self.get_graph() #graph[source][target] = value
+            self.node_neighbors_2hop = self.get_further_neighbors() 
 
         self.unique_entities_train = [self.entity2id[i]
-                                      for i in unique_entities_train] #unique_entities_train出现过的实体名
+                                      for i in unique_entities_train] 
 
         self.train_indices = np.array(
-            list(self.train_triples)).astype(np.int32) #转为int格式的训练三元组id数据？
+            list(self.train_triples)).astype(np.int32) 
         # These are valid triples, hence all have value 1
         self.train_values = np.array(
-            [[1]] * len(self.train_triples)).astype(np.float32) #训练三元组数据对用的label，全部为1
+            [[1]] * len(self.train_triples)).astype(np.float32) 
 
         self.validation_indices = np.array(
-            list(self.validation_triples)).astype(np.int32)#未用
+            list(self.validation_triples)).astype(np.int32)
         self.validation_values = np.array(
             [[1]] * len(self.validation_triples)).astype(np.float32)
 
-        self.test_indices = np.array(list(self.test_triples)).astype(np.int32)#用于get_validation_pred的测试正样本
+        self.test_indices = np.array(list(self.test_triples)).astype(np.int32)
         self.test_values = np.array(
-            [[1]] * len(self.test_triples)).astype(np.float32)#未用
+            [[1]] * len(self.test_triples)).astype(np.float32)#
         if cubic:
             self.valid_triples_dict = {j: i for i, j in enumerate(
-            self.train_triples)} #cubic数据不含test_triples等
+            self.train_triples)}
         else:
             self.valid_triples_dict = {j: i for i, j in enumerate(
-                self.train_triples + self.validation_triples + self.test_triples)} #全部三元组的集合，以索引字典形式
+                self.train_triples + self.validation_triples + self.test_triples)} 
         print("Total triples count {}, training triples {}, validation_triples {}, test_triples {}".format(len(self.valid_triples_dict), len(self.train_indices),
                                                                                                            len(self.validation_indices), len(self.test_indices)))
 
         # For training purpose
         self.batch_indices = np.empty(
-            (self.batch_size * (self.invalid_valid_ratio + 1), 3)).astype(np.int32)#容纳所有正负三元组样本的numpy向量
+            (self.batch_size * (self.invalid_valid_ratio + 1), 3)).astype(np.int32)#
         self.batch_values = np.empty(
             (self.batch_size * (self.invalid_valid_ratio + 1), 1)).astype(np.float32)
-    #循环取出第iter_num个batch,同时生成正负样本，label分别是1、-1。用到所有三元组集合valid_triples_dict，用于生成负样本。
     def get_iteration_batch(self, iter_num):
         if (iter_num + 1) * self.batch_size <= len(self.train_indices):
             self.batch_indices = np.empty(
@@ -74,18 +73,18 @@ class Corpus:
                 (self.batch_size * (self.invalid_valid_ratio + 1), 1)).astype(np.float32)
 
             indices = range(self.batch_size * iter_num,
-                            self.batch_size * (iter_num + 1)) #第iter_num个batch对应的真索引序列
+                            self.batch_size * (iter_num + 1)) 
 
             self.batch_indices[:self.batch_size,
-                               :] = self.train_indices[indices, :] #第iter_num个batch对应的三元组数据放在batch_indices开始位置
+                               :] = self.train_indices[indices, :]
             self.batch_values[:self.batch_size,
-                              :] = self.train_values[indices, :] #第iter_num个batch对应的真label，全为1
+                              :] = self.train_values[indices, :] 
 
             last_index = self.batch_size
 
-            if self.invalid_valid_ratio > 0: #生成负样本，对应label为-1。数量跟invalid_valid_ratio有关，放在正样本后面
+            if self.invalid_valid_ratio > 0: #
                 random_entities = np.random.randint(
-                    0, len(self.entity2id), last_index * self.invalid_valid_ratio) #某个batch中对应的负样本数量
+                    0, len(self.entity2id), last_index * self.invalid_valid_ratio) 
 
                 # Precopying the same valid indices from 0 to batch_size to rest
                 # of the indices
@@ -142,7 +141,7 @@ class Corpus:
 
             last_index = last_iter_size
 
-            if self.invalid_valid_ratio > 0: #生成负样本，对应label为-1
+            if self.invalid_valid_ratio > 0: 
                 random_entities = np.random.randint(
                     0, len(self.entity2id), last_index * self.invalid_valid_ratio)
 
@@ -228,13 +227,11 @@ class Corpus:
             return self.batch_indices, self.batch_values
 
         return self.batch_indices, self.batch_values
-    #生成图
-    #返回字典形式表示的图，每项表示一个三元组：graph[source][target] = value
+    #graph[source][target] = value
     def get_graph(self):
         graph = {}
         all_tiples = torch.cat([self.train_adj_matrix[0].transpose(
-            0, 1), self.train_adj_matrix[1].unsqueeze(1)], dim=1) #转为每行一个三元组的tensor
-
+            0, 1), self.train_adj_matrix[1].unsqueeze(1)], dim=1) #
         for data in all_tiples:
             source = data[1].data.item()
             target = data[0].data.item()
@@ -250,8 +247,7 @@ class Corpus:
     def get_multiroute_graph(self):
         graph = {}
         all_tiples = torch.cat([self.train_adj_matrix[0].transpose(
-            0, 1), self.train_adj_matrix[1].unsqueeze(1)], dim=1) #转为每行一个三元组的tensor
-
+            0, 1), self.train_adj_matrix[1].unsqueeze(1)], dim=1) #
         for data in all_tiples:
             source = data[1].data.item()#cols
             target = data[0].data.item()#rows
@@ -273,7 +269,7 @@ class Corpus:
     def get_path_graph(self):
         graph = {}
         all_tiples = torch.cat([self.train_adj_matrix[0].transpose(
-            0, 1), self.train_adj_matrix[1].unsqueeze(1)], dim=1) #转为每行一个三元组的tensor
+            0, 1), self.train_adj_matrix[1].unsqueeze(1)], dim=1) #
 
         for data in all_tiples:
             source = data[1].data.item()#cols
@@ -293,9 +289,7 @@ class Corpus:
                     graph[source][value].append(target)
         print("Path_Graph created")
         return graph
-    #找出所有跟source相距为nbd_size的node。
-    #neighbors返回值是一个字典，键是距离，值是(tuple(relations), tuple(entities[:-1]))，其中relations记录了一个nhop的关系路径，entities记录了对应的节点
-    #graph每项表示一个三元组：graph[source][target] = value
+
     def bfs(self, graph, source, nbd_size=2):
         visit = {}
         distance = {}
@@ -304,7 +298,7 @@ class Corpus:
 
         visit[source] = 1
         distance[source] = 0
-        parent[source] = (-1, -1) #source的父节点，（-1，-1）视为向上追溯遍历时的终点
+        parent[source] = (-1, -1)
 
         q = queue.Queue()
         q.put((source, -1))
@@ -323,7 +317,7 @@ class Corpus:
                         visit[target] = 1
                         if distance[target] > 2:
                             continue
-                        parent[target] = (top[0], graph[top[0]][target]) #parent各项，前者表示target的parent的id，后者为关系id或1(unweighed时)
+                        parent[target] = (top[0], graph[top[0]][target]) 
 
                         if distance[target] not in distance_lengths.keys():
                             distance_lengths[distance[target]] = 1
@@ -336,9 +330,9 @@ class Corpus:
             relations = []
             entities = [target]
             temp = target
-            while(parent[temp] != (-1, -1)):#向上追溯遍历target的父节点parent，rel放进relations，实体放进entities
-                relations.append(parent[temp][1])#记录向上追溯父节点时的关系路径
-                entities.append(parent[temp][0])#记录向上追溯父节点时的实体
+            while(parent[temp] != (-1, -1)):
+                relations.append(parent[temp][1])
+                entities.append(parent[temp][0])
                 temp = parent[temp][0]
 
             if(distance[target] in neighbors.keys()):
@@ -349,8 +343,7 @@ class Corpus:
                     (tuple(relations), tuple(entities[:-1]))]
 
         return neighbors
-    #2hop时，返回对应的邻居节点。形式为一个字典，neighbors[source][distance]=[],
-    # neighbors列表中的元素形为(tuple(relations), tuple(entities[:-1]))，其中relations记录了一个nhop的关系路径，entities记录了对应的节点
+
     def get_further_neighbors(self, nbd_size=2):
         neighbors = {}
         start_time = time.time()
@@ -373,9 +366,7 @@ class Corpus:
 
         print("length of neighbors dict is ", len(neighbors))
         return neighbors
-    #node_neighbors形式为，neighbors[source][distance]=[],使用了get_further_neighbors的返回值
-    #列表中元素形为(tuple(relations), tuple(entities[:-1]))，其中relations记录了一个nhop的关系路径，entities记录了对应的节点
-    #返回batch中各个源实体的nhop邻居，list形式，其中元素为一个2hop路径e1,relations[-1],relations[0],e2
+
     def get_batch_nhop_neighbors_all(self, args, batch_sources, node_neighbors, nbd_size=2):
         batch_source_triples = []
         print("length of unique_entities ", len(batch_sources))
@@ -383,7 +374,7 @@ class Corpus:
         for source in batch_sources:
             # randomly select from the list of neighbors
             if source in node_neighbors.keys():
-                nhop_list = node_neighbors[source][nbd_size]#2hop邻居data:(tuple(relations), tuple(entities[:-1]))
+                nhop_list = node_neighbors[source][nbd_size]#(tuple(relations), tuple(entities[:-1]))
 
                 for i, tup in enumerate(nhop_list):
                     if(args.partial_2hop and i >= 2):
@@ -391,7 +382,7 @@ class Corpus:
 
                     count += 1
                     batch_source_triples.append([source, nhop_list[i][0][-1], nhop_list[i][0][0],
-                                                 nhop_list[i][1][0]]) #e1,relations[-1],relations[0],e2，记录了一个2hop路径
+                                                 nhop_list[i][1][0]]) #e1,relations[-1],relations[0],e2
 
         return np.array(batch_source_triples).astype(np.int32)
     #根据transE计算score
@@ -402,8 +393,7 @@ class Corpus:
         x = source_embeds + relation_embeds - tail_embeds
         x = torch.norm(x, p=1, dim=1)
         return x
-    #验证计算结果的过程,仅此函数调用了self.test_indices用于验证模型，无返回值，直接统计结果。用到了所有训练、测试、验证集valid_triples_dict
-    #调用model_conv卷积score模型/model，进行预测，验证模型效果，这里model是已经训练过的model_conv卷积score模型
+
     def get_validation_pred(self, args, model, unique_entities):
         average_hits_at_100_head, average_hits_at_100_tail = [], []
         average_hits_at_ten_head, average_hits_at_ten_tail = [], []
