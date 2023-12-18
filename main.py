@@ -25,16 +25,16 @@ import pickle
 # %%from torchviz import make_dot, make_dot_from_trace
 
 
-#model_type = 'transE'
+
 model_type = 'rotatE'
-inductive = False#False
+inductive = False
 # exp = "fb15"
 # exp = "wn18"
 # exp = "umls"
 # exp = "ilpc"
 exp = "ilpc-large"
 
-inv_relatation = True #data & reverse data
+inv_relatation = False #data & reverse data
 
 reverse = False # reverse data
 
@@ -434,12 +434,6 @@ elif exp == 'ilpc-large':
 cubic_from_reverse = False#True
 
 def load_data(args):
-    #train_data：(train_triples, train_adjacency_mat)，即(三元组id， (rows, cols, data)),其中三元组id的每行为 (entity2id[e1], relation2id[relation], entity2id[e2])
-    #其中，train_triples是作为训练数据，而train_adjacency_mat是作为构建图的依据
-    ##validation_data未用，test_data不参与图的训练、评估，仅用于最后打分模型conv的评估样本。另外他们组成的三元组全集用于负样本生成、辅助进行conv的评估。
-    ##负样本：gat阶段，用于transE的marginloss，而conv阶段，正负样本通过SoftMarginLoss函数生成label和概率得分之间的loss
-    #, validation_data, test_data, entity2id, relation2id, headTailSelector, unique_entities_train = build_data(
-    #    args.data, is_unweigted=False, directed=True)
     file = args.data + "/load_data_pickle.pickle"
     if os.path.exists(file):
         with open(file, 'rb') as handle:
@@ -459,39 +453,26 @@ def load_data(args):
         with open(file, 'wb') as handle:
             pickle.dump(load_data_pickle, handle,
                         protocol=pickle.HIGHEST_PROTOCOL)
-    # unique_cb_entities_train = []
-    # id2cd_entity = {v: k for k, v in relation2id.items()}
-    # for rel in unique_cb_entities:
-    #     unique_cb_entities_train.append(id2cd_entity[rel])
-    # load_data_pickle = (train_data, validation_data, test_data, entity2id, relation2id, headTailSelector, unique_entities_train,\
-    #         train_cb_data,cb_entity2id,cb_relation2id,cb_headTailSelector,unique_cb_entities_train)
-    # file = args.data + "/load_data_pickle-fix.pickle"
-    # with open(file, 'wb') as handle:
-    #     pickle.dump(load_data_pickle, handle,
-    #                 protocol=pickle.HIGHEST_PROTOCOL)
-    # unique_cb_entities = unique_cb_entities_train
-    #Rnum = len(relation2id)
-    if args.pretrained_emb:#vec文件固定为100维
+    if args.pretrained_emb:
         entity_embeddings, relation_embeddings = init_embeddings(os.path.join(args.data, 'entity2vec.txt'),
                                                                  os.path.join(args.data, 'relation2vec.txt'),inv = inv_relatation)
         print("Initialised relations and entities from TransE")
 
-    else:# args.embedding_size 默认为50维
+    else:
         entity_embeddings = np.random.randn(
             len(entity2id), args.embedding_size)
         relation_embeddings = np.random.randn(
             len(relation2id), args.embedding_size)
         print("Initialised relations and entities randomly")
-    cb_entity_embeddings = relation_embeddings#cb层间图的实体嵌入初始化为层内图的关系的初始值
-    #cb_relation_embeddings = entity_embeddings
-    cb_relation_embeddings = np.random.randn(len(entity2id), args.embedding_size)#cb层间图的从句关系嵌入初始化为随机值
+    cb_entity_embeddings = relation_embeddings
+
+    cb_relation_embeddings = np.random.randn(len(entity2id), args.embedding_size)#
     corpus = Corpus(args, train_data, validation_data, test_data, entity2id, relation2id, headTailSelector,
                     args.batch_size_gat, args.valid_invalid_ratio_gat, unique_entities_train, args.get_2hop)
     cb_corpus = Corpus(args, train_cb_data, validation_data, test_data, cb_entity2id, cb_relation2id, cb_headTailSelector,
                     args.batch_size_gat, args.valid_invalid_ratio_gat, unique_cb_entities, args.get_2hop,True)
     return corpus, torch.FloatTensor(entity_embeddings), torch.FloatTensor(relation_embeddings),cb_corpus,torch.FloatTensor(cb_entity_embeddings), torch.FloatTensor(cb_relation_embeddings)
 
-#Corpus_背景知识图谱，entity_embeddings为初始化的嵌入表
 file = args.data + "/Corpus_.pickle"
 if not os.path.exists(file):
     print("Init datas Generating  >>>")
@@ -538,55 +519,49 @@ else:
     cb_entity_embeddings = pickle.load(open(args.data + "/cb_entity_embeddings.pickle",'rb'))
     cb_relation_embeddings = pickle.load(open(args.data + "/cb_relation_embeddings.pickle",'rb'))
 
-if(args.use_2hop): #fb15k中不使用
+if(args.use_2hop):
     print("Opening node_neighbors pickle object")
     file = args.data + "/2hop.pickle"
     with open(file, 'rb') as handle:
         node_neighbors_2hop = pickle.load(handle)
 
-        
-#print("\n len(Corpus_.train_indices) ==", len(Corpus_.train_indices))
-#print("\n len(cb_Corpus_.train_indices) ==", len(cb_Corpus_.train_indices))
 
 entity_embeddings_copied = deepcopy(entity_embeddings)
 relation_embeddings_copied = deepcopy(relation_embeddings)
 cb_entity_embeddings_copied = deepcopy(cb_entity_embeddings)
 cb_relation_embeddings_copied = deepcopy(cb_relation_embeddings)
 print("Initial cb_entity dimensions {} , cb_relation dimensions {}".format(
-    cb_entity_embeddings.size(), cb_relation_embeddings.size()))#当纯随机时，是50维（args决定）。加入pretrain时，cb_entity_embeddings为100维，cb_relation_embeddings依然由args决定
+    cb_entity_embeddings.size(), cb_relation_embeddings.size()))
 print("Initial entity dimensions {} , relation dimensions {}".format(
-    entity_embeddings.size(), relation_embeddings.size()))#当纯随机时，都是50维（args决定）。但加入pretrain时，为100维。
+    entity_embeddings.size(), relation_embeddings.size()))
 # %%
 
-cos = torch.nn.CosineSimilarity(dim=0,eps=1e-12)#(1,-1)eps小一些，可以体高精度
+cos = torch.nn.CosineSimilarity(dim=0,eps=1e-12)
 def infer(h,r,model = 'transE'):
     if model=='transE':
         return h+r
     else:
-        re_h, im_h = torch.chunk(h, 2, dim=-1)#根据rotateE的原理，最后一维前后两段分别存放向量的实部和虚部
+        re_h, im_h = torch.chunk(h, 2, dim=-1)
 
         pi = 3.141592653589793238462643383279
-        r = r / (1 / pi)##rotateE的关系向量存放的是旋转角度信息
+        r = r / (1 / pi)#
 
         r_up,r_dn = torch.chunk(r, 2, dim=-1)
 
-        r_conj = torch.min(r_up-r_dn,r_up+r_dn) # r_up<0,r_dn<0时跳变r_up+r_dn，其他均为r_up-r_dn，模拟合取
-
+        r_conj = torch.min(r_up-r_dn,r_up+r_dn)
         re_r = torch.cos(r_conj)
         im_r = torch.sin(r_conj)
 
-        re_res = re_h * re_r - im_h * im_r#实部
-        im_res = re_h * im_r + im_h * re_r#虚部
+        re_res = re_h * re_r - im_h * im_r
+        im_res = re_h * im_r + im_h * re_r
 
         return torch.cat([re_res, im_res], dim=-1)
 def chain(r1,r2,model = 'transE'):
     return r1+r2
 def dist(c,t,model = 'transE',sim_model = 'F1'):
     if model=='transE':
-        #dist = torch.norm(c-t, p=1, dim=1)
         if sim_model == 'cos':
-            dist = cos(c,t)
-            #dist = (1-cos(path_emb/2,metric_emb[target_r]))                
+            dist = cos(c,t)            
         elif sim_model == 'F2':
             dist = torch.linalg.norm((c)-t,ord=2, dim=1) #ord=2
         else:#F1
@@ -602,51 +577,39 @@ def dist(c,t,model = 'transE',sim_model = 'F1'):
 CUDA = torch.cuda.is_available()
 
 
-#采用transE的目标函数计算loss，训练GAT
-#train_indices，训练集的id索引，每行是一个三元组
 def batch_gat_loss(gat_loss_func, train_indices, entity_embed, relation_embed,mod = 0):
     len_pos_triples = int(
-        train_indices.shape[0] / (int(args.valid_invalid_ratio_gat) + 1))#获取正负样本的分界线
+        train_indices.shape[0] / (int(args.valid_invalid_ratio_gat) + 1))
     print("train_indices.shape",train_indices.shape)
     print("len_pos_triples",len_pos_triples)
 
-    pos_triples = train_indices[:len_pos_triples] #前一部分是正样本,长3333
+    pos_triples = train_indices[:len_pos_triples]
     if mod == 0:
         neg_triples = train_indices[len_pos_triples:]
     else:
         neg_triples = train_indices[len_pos_triples:]
-    #print("pos_triples.shape",pos_triples.shape)
-    #print("neg_triples.shape",neg_triples.shape)
 
     pos_triples = pos_triples.repeat(int(args.valid_invalid_ratio_gat), 1)
-    #print("pos_triples.shape",pos_triples.shape)#6666
 
     source_embeds = entity_embed[pos_triples[:, 0]]
     relation_embeds = relation_embed[pos_triples[:, 1]]
     tail_embeds = entity_embed[pos_triples[:, 2]]
 
-    # x = source_embeds + relation_embeds - tail_embeds
-    # pos_norm = torch.norm(x, p=1, dim=1)
     pos_norm = dist(infer(source_embeds,relation_embeds,model = model_type),tail_embeds,model = model_type)
 
     source_embeds = entity_embed[neg_triples[:, 0]]
     relation_embeds = relation_embed[neg_triples[:, 1]]
     tail_embeds = entity_embed[neg_triples[:, 2]]
 
-    # x = source_embeds + relation_embeds - tail_embeds
-    # neg_norm = torch.norm(x, p=1, dim=1)
     neg_norm = dist(infer(source_embeds,relation_embeds,model = model_type),tail_embeds,model = model_type)
 
     y = -torch.ones(int(args.valid_invalid_ratio_gat) * len_pos_triples).cuda()
-    # print("pos_norm.shape",pos_norm.shape)#6666
-    # print("neg_norm.shape",neg_norm.shape)#
 
     loss = gat_loss_func(pos_norm, neg_norm, y)
     return loss
 
-#parallel
+
 device_ids=[0,1]
-#out_device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
 
 def train_gat(args):
     print("train_gat ...")
@@ -659,16 +622,12 @@ def train_gat(args):
         "\nModel type -> GAT layer with {} heads used , Initital Embeddings training".format(args.nheads_GAT[0]))
     model_gat = SpKBGATModified(entity_embeddings, relation_embeddings, args.entity_out_dim, args.entity_out_dim,
                                 args.drop_GAT, args.alpha, args.nheads_GAT) #GAT
-    #cb_model_gat = SpKBGATModified(cb_entity_embeddings, cb_relation_embeddings, args.entity_out_dim, args.entity_out_dim,args.drop_GAT, args.alpha, args.nheads_GAT) #cubic GAT
-
-    #print("entity_embeddings.shape,relation_embeddings.shape",entity_embeddings.shape,relation_embeddings.shape)
     if CUDA:
         model_gat.cuda()
         if torch.cuda.device_count() > 1:
             print("Use", torch.cuda.device_count(), 'gpus')
             model_gat = nn.DataParallel(model_gat, device_ids=[torch.cuda.current_device()])
     
-    #model_gat.to(out_device)
 
     optimizer = torch.optim.Adam(
         model_gat.parameters(), lr=args.lr, weight_decay=args.weight_decay_gat)
@@ -679,10 +638,7 @@ def train_gat(args):
     gat_loss_func = nn.MarginRankingLoss(margin=args.margin)
 
     current_batch_2hop_indices = torch.tensor([]).long()
-    #Corpus_为一个Corpus对象
-    #node_neighbors_2hop（get_further_neighbors函数返回值）：表示邻居节点的字典，
-    # 形式为，neighbors[source][distance]=[],列表中形为(tuple(relations), tuple(entities[:-1]))
-    #current_batch_2hop_indices为当前batch实体的2hop邻居实体，list形式，其中元素为一个2hop路径e1,relations[-1],relations[0],e2
+
     if(args.use_2hop):
         current_batch_2hop_indices = Corpus_.get_batch_nhop_neighbors_all(args,
                                                                           Corpus_.unique_entities_train, node_neighbors_2hop)
@@ -701,9 +657,9 @@ def train_gat(args):
         print("\nepoch-> ", epoch)
         random.shuffle(Corpus_.train_triples)
         Corpus_.train_indices = np.array(
-            list(Corpus_.train_triples)).astype(np.int32) ##转为int格式的训练三元组id数据
+            list(Corpus_.train_triples)).astype(np.int32)
 
-        model_gat.train()  # getting in training mode，这里仅是切换为train模式
+        model_gat.train()  # getting in training mode
         start_time = time.time()
         epoch_loss = []
 
@@ -720,7 +676,7 @@ def train_gat(args):
         for iters in range(num_iters_per_epoch):
             print("\n iters-> ", iters)
             start_time_iter = time.time()
-            train_indices, train_values = Corpus_.get_iteration_batch(iters)#循环取出第iter_num个batch,同时生成正负样本，label分别是1、-1
+            train_indices, train_values = Corpus_.get_iteration_batch(iters)
 
             print("\n len(train_indices) ==", len(train_indices))
             if CUDA:
@@ -733,8 +689,6 @@ def train_gat(args):
                 train_values = Variable(torch.FloatTensor(train_values))
 
             # forward pass
-            #train_adj_matrix为(adj_indices, adj_values)，每行是([e1,e2],r),r为关系id或者1
-            #train_indices为转为int格式的训练三元组id数据
             entity_embed, relation_embed,entity_l_embed = model_gat(
                 Corpus_, Corpus_.train_adj_matrix, train_indices, current_batch_2hop_indices)
 
@@ -768,27 +722,22 @@ def train_gat_cb(args):
     ####################################
 
     print("Load model")
-    #epoch_load = args.epochs_gat #默认取模型最后一个epcoh
-    epoch_load = 0#默认初始化训练时
-    epoch_load = 0#载入之前的模型时。手动指定载入的模型epoch,注意是文件名里的数字+1
+    #epoch_load = args.epochs_gat
+    epoch_load = 0#
+    epoch_load = 0#
 
     print(
         "\nModel type -> GAT layer with {} heads used , Initital Embeddings training".format(args.nheads_GAT[0]))
     model_gat = SpKBGATModified(entity_embeddings, relation_embeddings, args.entity_out_dim, args.entity_out_dim,
                                 args.drop_GAT, args.alpha, args.nheads_GAT) #GAT
 
-    #print("train_gat_cb entity_embeddings.shape,relation_embeddings.shape",entity_embeddings.shape,relation_embeddings.shape)
-
-    #model_gat.to(out_device)
     pre  = 'cb_e'
     if epoch_load>0:
         model_gat.load_state_dict(cleanup_state_dict(torch.load(
         '{}/trained_cb_e{}.pth'.format(args.output_folder, epoch_load - 1))), strict=True)
     final_entity_embeddings = model_gat.final_entity_embeddings
-    final_relation_embeddings = model_gat.final_relation_embeddings#得到GAT模型的最终嵌入
+    final_relation_embeddings = model_gat.final_relation_embeddings#
 
-    #model_gat = SpKBGATModified(final_entity_embeddings, final_relation_embeddings, args.entity_out_dim, args.entity_out_dim,
-    #                            args.drop_GAT, args.alpha, args.nheads_GAT) #GAT
     
     cb_model_gat = SpKBGATModified(model_gat.relation_embeddings, cb_relation_embeddings, args.entity_out_dim, args.entity_out_dim,
     args.drop_GAT, args.alpha, args.nheads_GAT,cb_flag=True) #cubic GAT
@@ -798,9 +747,8 @@ def train_gat_cb(args):
         cb_model_gat.load_state_dict(cleanup_state_dict(torch.load(
         '{}/trained_cb_r{}.pth'.format(args.output_folder, epoch_load - 1))), strict=True)
     cb_final_entity_embeddings = cb_model_gat.final_entity_embeddings
-    cb_final_relation_embeddings = cb_model_gat.final_relation_embeddings#得到GAT模型的最终嵌入
+    cb_final_relation_embeddings = cb_model_gat.final_relation_embeddings#
 
-    #print("train_gat_cb final_entity_embeddings.shape,final_relation_embeddings.shape,cb_relation_embeddings.shape",final_entity_embeddings.shape,final_relation_embeddings.shape,cb_relation_embeddings.shape)
     divc = torch.cuda.current_device()
     if CUDA:
         model_gat.cuda()
@@ -816,17 +764,6 @@ def train_gat_cb(args):
     cb_optimizer = torch.optim.Adam(
         cb_model_gat.parameters(), lr=args.lr, weight_decay=args.weight_decay_gat)
 
-    #test 参数重复
-    # param_set = set()#一个generator objects，只能调用一次。
-    # param_groups =[{'params': model_gat.parameters()}] 
-    # param_group = {'params': cb_model_gat.parameters()}
-    # for group in param_groups:
-    #     #print(" model_gat parameters():",list(group['params']))
-    #     param_set.update(set(group['params']))
-    # #print(" cb_model_gat parameters():",list(param_group['params']))
-    # #print(" cb_model_gat parameters():\n",list(param_group['params']))
-    # if not param_set.isdisjoint(set(param_group['params'])):
-    #     print("some parameters appear in more than one parameter group")
 
     indiv_params =  []
     idx = 0
@@ -837,8 +774,6 @@ def train_gat_cb(args):
                              {'params': indiv_params}],
                              lr=args.lr, weight_decay=args.weight_decay_gat)
 
-    #print("model_gat.parameters(),cb_model_gat.parameters()",model_gat.parameters(),cb_model_gat.parameters())
-    #print("list model_gat.parameters(),cb_model_gat.parameters()",list(model_gat.named_parameters()),list(cb_model_gat.named_parameters()))
     scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer, step_size=500, gamma=0.5, last_epoch=-1)
     cb_scheduler = torch.optim.lr_scheduler.StepLR(
@@ -849,10 +784,7 @@ def train_gat_cb(args):
     gat_loss_func = nn.MarginRankingLoss(margin=args.margin)
 
     current_batch_2hop_indices = torch.tensor([]).long()
-    #Corpus_为一个Corpus对象
-    #node_neighbors_2hop（get_further_neighbors函数返回值）：表示邻居节点的字典，
-    # 形式为，neighbors[source][distance]=[],列表中形为(tuple(relations), tuple(entities[:-1]))
-    #current_batch_2hop_indices为当前batch实体的2hop邻居实体，list形式，其中元素为一个2hop路径e1,relations[-1],relations[0],e2
+
     if(args.use_2hop):
         current_batch_2hop_indices = Corpus_.get_batch_nhop_neighbors_all(args,
                                                                           Corpus_.unique_entities_train, node_neighbors_2hop)
@@ -869,18 +801,18 @@ def train_gat_cb(args):
     print("Number of epochs {}".format(args.epochs_gat))
 
     init_flag = True
-    cb_entity_embed = cb_entity_embeddings #仅为了避免这个变量在model_gat第一次调用时的提前赋值语法错误
-    #cb_relation_embed = cb_relation_embeddings
+    cb_entity_embed = cb_entity_embeddings #
+
     for epoch in range(epoch_load,args.epochs_gat):
         print("\nepoch-> ", epoch)
         random.shuffle(Corpus_.train_triples)
         random.shuffle(cb_Corpus_.train_triples)
         Corpus_.train_indices = np.array(
-            list(Corpus_.train_triples)).astype(np.int32) ##转为int格式的训练三元组id数据
+            list(Corpus_.train_triples)).astype(np.int32) 
         cb_Corpus_.train_indices = np.array(
             list(cb_Corpus_.train_triples)).astype(np.int32)
 
-        model_gat.train()  # getting in training mode，这里仅是切换为train模式
+        model_gat.train()  # getting in training mode
         cb_model_gat.train()
         start_time = time.time()
         epoch_loss = []
@@ -899,16 +831,14 @@ def train_gat_cb(args):
                 num_iters_per_epoch = (
                     len(cb_Corpus_.train_indices) // args.batch_size_gat) + 1
         print("\n num_iters_per_epoch ==", num_iters_per_epoch)
-        print("\n len(Corpus_.train_indices) ==", len(Corpus_.train_indices))
-        print("\n len(cb_Corpus_.train_indices) ==", len(cb_Corpus_.train_indices))
+
 
         for iters in range(num_iters_per_epoch):
             print("\n iters-> ", iters)
             start_time_iter = time.time()
-            train_indices, train_values = Corpus_.get_iteration_batch(iters)#循环取出第iter_num个batch,同时生成正负样本，label分别是1、-1
-            cb_train_indices, cb_train_values = cb_Corpus_.get_iteration_batch(iters) #数量应该不一致，主要是负样本数量不同
-            print("\n len(train_indices) ==", len(train_indices))
-            print("\n len(cb_train_indices) ==", len(cb_train_indices))
+            train_indices, train_values = Corpus_.get_iteration_batch(iters)#
+            cb_train_indices, cb_train_values = cb_Corpus_.get_iteration_batch(iters) #
+
             if CUDA:
                 train_indices = Variable(
                     torch.LongTensor(train_indices)).cuda()#.to(divc)
@@ -924,8 +854,6 @@ def train_gat_cb(args):
                 cb_train_values = Variable(torch.FloatTensor(cb_train_values))
 
             # forward pass
-            #train_adj_matrix为(adj_indices, adj_values)，每行是([e1,e2],r),r为关系id或者1
-            #train_indices为转为int格式的训练三元组id数据
             print("\n Run model_gat forward",)
             if init_flag:
                 entity_embed, relation_embed,entity_l_embed = model_gat(
@@ -935,31 +863,10 @@ def train_gat_cb(args):
                 entity_embed, relation_embed,entity_l_embed = model_gat(
                     Corpus_, Corpus_.train_adj_matrix, train_indices, current_batch_2hop_indices,ass_rel=cb_entity_embed)
 
-            
-            #optimizer.zero_grad()
-
-            #loss = batch_gat_loss(
-            #    gat_loss_func, train_indices, entity_embed, relation_embed)
-
-            # loss.backward()
-            # optimizer.step()
-
-            # epoch_loss.append(loss.data.item())
-
             print("\n Run cb_model_gat forward",)
             
             cb_entity_embed, cb_relation_embed,cb_entity_l_embed = cb_model_gat(
                 cb_Corpus_, cb_Corpus_.train_adj_matrix, cb_train_indices, current_batch_2hop_indices,ass_ent=relation_embed)
-
-            #cb_optimizer.zero_grad()
-
-            # cb_loss = batch_gat_loss(
-            #     gat_loss_func, cb_train_indices, cb_entity_embed, cb_relation_embed,mod = 1)
-
-            # cb_loss.backward()
-            # cb_optimizer.step()
-
-            # epoch_loss.append(cb_loss.data.item())
             
             all_optimizer.zero_grad()
             loss = batch_gat_loss(
@@ -978,8 +885,7 @@ def train_gat_cb(args):
             print("Iteration-> {0}  , Iteration_time-> {1:.4f} , Iteration_loss {2:.4f}".format(
                 iters, end_time_iter - start_time_iter, loss.data.item()))
 
-        # scheduler.step()
-        # cb_scheduler.step()
+
         all_scheduler.step()
         print("Epoch {} , average loss {} , epoch_time {}".format(
             epoch, sum(epoch_loss) / len(epoch_loss), time.time() - start_time))
@@ -991,7 +897,7 @@ def train_gat_cb(args):
             save_model(cb_model_gat, args.data, epoch,
                    args.output_folder,prex = 'cb_r')
 
-#使用训练集Corpus_.train_triples训练打分函数model_conv
+
 def train_conv(args):
     print("train_conv ...")#
 
@@ -1013,10 +919,10 @@ def train_conv(args):
     model_gat.load_state_dict(torch.load(
         '{}/trained_{}{}.pth'.format(args.output_folder,prex, args.epochs_gat - 1)), strict=False)
     model_conv.final_entity_embeddings = model_gat.final_entity_embeddings
-    model_conv.final_relation_embeddings = model_gat.final_relation_embeddings#得到GAT模型的最终嵌入
+    model_conv.final_relation_embeddings = model_gat.final_relation_embeddings
 
-    Corpus_.batch_size = args.batch_size_conv #修改Corpus_的batch_size
-    Corpus_.invalid_valid_ratio = int(args.valid_invalid_ratio_conv) #设置conv训练过程的负样本比例
+    Corpus_.batch_size = args.batch_size_conv 
+    Corpus_.invalid_valid_ratio = int(args.valid_invalid_ratio_conv)
 
     optimizer = torch.optim.Adam(
         model_conv.parameters(), lr=args.lr, weight_decay=args.weight_decay_conv)
@@ -1024,7 +930,7 @@ def train_conv(args):
     scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer, step_size=25, gamma=0.5, last_epoch=-1)
 
-    margin_loss = torch.nn.SoftMarginLoss() #用于二分类问题(label1、-1)的loss，预测输出为一个对1/-1label的概率值
+    margin_loss = torch.nn.SoftMarginLoss() 
 
     epoch_losses = []   # losses of all epochs
     print("Number of epochs {}".format(args.epochs_conv))
@@ -1035,10 +941,9 @@ def train_conv(args):
         Corpus_.train_indices = np.array(
             list(Corpus_.train_triples)).astype(np.int32)
 
-        model_conv.train()  # getting in training mode，切换为train模式，基于GAT的嵌入向量输入，训练convKB
+        model_conv.train()  # getting in training mode
         start_time = time.time()
         epoch_loss = []
-        #每个batch的长度batch_size_conv，计算总共需要多少个batch/iter来跑完训练
         if len(Corpus_.train_indices) % args.batch_size_conv == 0:
             num_iters_per_epoch = len(
                 Corpus_.train_indices) // args.batch_size_conv
@@ -1046,9 +951,9 @@ def train_conv(args):
             num_iters_per_epoch = (
                 len(Corpus_.train_indices) // args.batch_size_conv) + 1
 
-        for iters in range(num_iters_per_epoch):#每个iter实际上是一个batch，Corpus_的batch_size已改为args.batch_size_conv
+        for iters in range(num_iters_per_epoch):
             start_time_iter = time.time()
-            train_indices, train_values = Corpus_.get_iteration_batch(iters)#循环取出第iter_num个batch,同时生成正负样本，label分别是1、-1
+            train_indices, train_values = Corpus_.get_iteration_batch(iters)
 
             if CUDA:
                 train_indices = Variable(
@@ -1060,7 +965,7 @@ def train_conv(args):
                 train_values = Variable(torch.FloatTensor(train_values))
 
             preds = model_conv(
-                Corpus_, Corpus_.train_adj_matrix, train_indices) #ConvKB输出预测结果
+                Corpus_, Corpus_.train_adj_matrix, train_indices)
 
             optimizer.zero_grad()
 
@@ -1084,7 +989,6 @@ def train_conv(args):
         save_model(model_conv, args.data, epoch,
                    args.output_folder + "conv/")
 
-#全部模型训练完毕后的验证过程
 def evaluate_conv(args, unique_entities):
     model_conv = SpKBGATConvOnly(entity_embeddings, relation_embeddings, args.entity_out_dim, args.entity_out_dim,
                                  args.drop_GAT, args.drop_conv, args.alpha, args.alpha_conv,
@@ -1095,13 +999,10 @@ def evaluate_conv(args, unique_entities):
     model_conv.cuda()
     model_conv.eval()
     with torch.no_grad():
-        Corpus_.get_validation_pred(args, model_conv, unique_entities) #验证计算结果的过程,仅此函数调用了self.test_indices，无返回值，直接统计结果
+        Corpus_.get_validation_pred(args, model_conv, unique_entities) 
 
 
 import os
-
-#os.environ["CUDA_VISIBLE_DEVICES"] = "3,2"
-
 
 def cleanup_state_dict(state_dict):
     new_state = {}
@@ -1116,8 +1017,6 @@ def cleanup_state_dict(state_dict):
 if __name__ == "__main__":
     print("main0.py init complete")
     print("train_gat & cubic ...")
-    #train_gat(args)
-    #print("train_gat complete")
     train_gat_cb(args)
     print("train_gat_cb complete")
     inductive = False
