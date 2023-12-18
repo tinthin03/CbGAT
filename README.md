@@ -27,7 +27,7 @@ In order to test the inductive reasoning performance of our model, we introduce 
 
 2. Run rcb.sh for representation learning with GPU 0:
    > ./rcb.sh 0
-   If you want to skip representation learning and directly conduct rule mining experiments, you can download a pre-trained model of the *ilpc-target* dataset (in the *checkpoints* folder) through the following link:
+If you want to skip representation learning and directly conduct rule mining experiments, you can download a pre-trained model of the *ilpc-target* dataset (in the *checkpoints* folder) through the following link:
    > https://drive.google.com/drive/folders/1WXNAj1O4e5HdWgaYBfCPGUMbuvnOE6av?usp=sharing
 3. run rem.sh for rule mining with GPU 0:
    > ./rem.sh 0
