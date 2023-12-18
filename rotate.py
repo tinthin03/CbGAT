@@ -7,7 +7,7 @@ from main import reverse
 from reasoning_model import ReasoningModel
 
 
-class RotatE(ReasoningModel):#内含一个静态的c++类库，存放了rotateE的计算数据
+class RotatE(ReasoningModel):
 
     def __init__(self, dataset, pretrained=None):
         # load pretrained rotate
@@ -72,15 +72,15 @@ class RotatE(ReasoningModel):#内含一个静态的c++类库，存放了rotateE�
         if isinstance(r_embed, int):
             r_embed = self.relation_embed.index_select(0, torch.tensor(r_embed).cuda()).squeeze().cuda()
 
-        re_h, im_h = torch.chunk(h_embed, 2, dim=-1)#根据rotateE的原理，最后一维前后两段分别存放向量的实部和虚部
+        re_h, im_h = torch.chunk(h_embed, 2, dim=-1)#
 
         pi = 3.141592653589793238462643383279
-        r_embed = r_embed / (self.embed_range / pi)##rotateE的关系向量存放的是旋转角度信息
+        r_embed = r_embed / (self.embed_range / pi)#
         re_r = torch.cos(r_embed)
         im_r = torch.sin(r_embed)
 
-        re_res = re_h * re_r - im_h * im_r#实部
-        im_res = re_h * im_r + im_h * re_r#虚部
+        re_res = re_h * re_r - im_h * im_r#
+        im_res = re_h * im_r + im_h * re_r#
 
         return torch.cat([re_res, im_res], dim=-1)
 
@@ -92,29 +92,23 @@ class RotatE(ReasoningModel):#内含一个静态的c++类库，存放了rotateE�
         metrics = self.metrics
         with torch.no_grad():
             for i, (h, r, t) in enumerate(infer_tris):
-                score = self.gamma - self.dist(self.embed(h, r), self.entity_embed)#rotateE的算法loss为（hOr-t），因此这里对所有实体打分，衡量其与tail的匹配度
+                score = self.gamma - self.dist(self.embed(h, r), self.entity_embed)#
                 answer = (self.answer if valid else self.answer_test)[(h, r)]
                 results.append(metrics.apply(score, answer, t))
-            # print(h, r, t, answer)
-            # print(score)
 
         return results
 
-##对每个三元组样本均调用一次。
+
 class RotatECompare(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, a, b, pa, pb):#rule_embed（来自生成器）, self.rotate.entity_embed, crule, centity，entity_embed可以用指针调用
+    def forward(ctx, a, b, pa, pb):
         a = a.contiguous()
         b = b.contiguous()
         pa = pa.contiguous()
         pb = pb.contiguous()
-        # print("RotatE compare", a.size(), b.size())
-        # print(pa.min().item(), pa.max().item())
-        # print(pb.min().item(), pb.max().item())
+
 
         ctx.save_for_backward(a, b, pa, pb)
-        # 针对当前三元组，batch中包含当前评估器下各个规则判断的每个tail实体（即pgnd的数量，等于 crule, centity的长度），这些对tail的判断存于centity，对应的规则存于crule
-        # 本函数比较各个crule的rotateE推理结果与centity的相似度，计算其hOr，与所有实体向量的欧式距离相似度（用于判断哪些是tail），返回一个长度为pgnd的数量的数组
         return rotate_compare_cppext.forward(a, b, pa, pb)
     @staticmethod
     def backward(ctx, ogd):
@@ -141,21 +135,21 @@ class RotatECompare_Force:
         return dist
 
 
-class RotatEDist(torch.autograd.Function):#roch的函数类
+class RotatEDist(torch.autograd.Function):
 
     @staticmethod
-    def forward(ctx, x, a):#rotateE的算法loss为（hOr-t）。这里x为输入的hOr，a为所有的实体嵌入，计算实体跟t的相似度距离
+    def forward(ctx, x, a):
         x = x.contiguous()
         a = a.contiguous()
-        dist = rotate_dist_cppext.forward(x, a)#距离度量为欧氏距离value += sqrtf(re * re + im * im)
-        ctx.save_for_backward(x, a)#保存输入，用于backward
+        dist = rotate_dist_cppext.forward(x, a)#value += sqrtf(re * re + im * im)
+        ctx.save_for_backward(x, a)
         return dist
 
     @staticmethod
     def backward(ctx, outgrad_dist):
         # print(outgrad_dist)
         x, a = ctx.saved_tensors
-        ingrad_x, ingrad_a = rotate_dist_cppext.backward(x, a, outgrad_dist)#梯度计算，手动求导
+        ingrad_x, ingrad_a = rotate_dist_cppext.backward(x, a, outgrad_dist)
         return ingrad_x, ingrad_a
 
 
