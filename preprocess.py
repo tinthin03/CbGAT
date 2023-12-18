@@ -58,9 +58,7 @@ def parse_line(line):
     e1, relation, e2 = line[0].strip(), line[1].strip(), line[2].strip()
     return e1, relation, e2
 
-#载入数据文件，形成三元组
-#triples_data每行是一个三元组的id，(rows, cols, data)分别是目标实体、源实体、关系的id(或者1)，当是1时，可以组合成一个邻接矩阵
-#对于(h,r,t),邻接矩阵(rows, cols, data)的每行，rows:t,cols:h,data:r
+
 def load_data(filename, entity2id, relation2id, is_unweigted=False, directed=True):
     with open(filename) as f:
         lines = f.readlines()
@@ -68,10 +66,6 @@ def load_data(filename, entity2id, relation2id, is_unweigted=False, directed=Tru
     # this is list for relation triples
     triples_data = []
 
-    # for sparse tensor, rows list contains corresponding row of sparse tensor, cols list contains corresponding
-    # columnn of sparse tensor, data contains the type of relation
-    # Adjacecny matrix of entities is undirected, as the source and tail entities should know, the relation
-    # type they are connected with
     rows, cols, data = [], [], []
     unique_entities = set()
     for line in lines:
@@ -106,14 +100,13 @@ def load_data(filename, entity2id, relation2id, is_unweigted=False, directed=Tru
     print("number of unique_entities ->", len(unique_entities))
     return triples_data, (rows, cols, data), list(unique_entities)
 
-#生成训练所需的三元组和邻接矩阵
+
 def build_data(path='./data/WN18RR/', is_unweigted=False, directed=True):
     entity2id = read_entity_from_id(path + 'entity2id.txt')
     relation2id = read_relation_from_id(path + 'relation2id.txt',directed)
 
     # Adjacency matrix only required for training phase
     # Currenlty creating as unweighted, undirected
-    #返回：三元组id(head,tail,r)， (rows, cols, data)=(tail,head,r)，出现过的实体名
     train_triples, train_adjacency_mat, unique_entities_train = load_data(os.path.join(
         path, 'train.txt'), entity2id, relation2id, is_unweigted, directed)
     validation_triples, valid_adjacency_mat, unique_entities_validation = load_data(
@@ -121,7 +114,7 @@ def build_data(path='./data/WN18RR/', is_unweigted=False, directed=True):
     test_triples, test_adjacency_mat, unique_entities_test = load_data(os.path.join(
         path, 'test.txt'), entity2id, relation2id, is_unweigted, directed)
 
-    id2entity = {v: k for k, v in entity2id.items()}#实体序号逆字典
+    id2entity = {v: k for k, v in entity2id.items()}
     id2relation = {v: k for k, v in relation2id.items()}#
     left_entity, right_entity = {}, {}
 
@@ -135,35 +128,32 @@ def build_data(path='./data/WN18RR/', is_unweigted=False, directed=True):
             left_entity[relation2id[relation]] = {}
         if entity2id[e1] not in left_entity[relation2id[relation]]:
             left_entity[relation2id[relation]][entity2id[e1]] = 0
-        left_entity[relation2id[relation]][entity2id[e1]] += 1 #(e1, relation)左连接的数量
+        left_entity[relation2id[relation]][entity2id[e1]] += 1 #(e1, relation)
 
         # Count number of occurences for each (relation, e2)
         if relation2id[relation] not in right_entity:
             right_entity[relation2id[relation]] = {}
         if entity2id[e2] not in right_entity[relation2id[relation]]:
             right_entity[relation2id[relation]][entity2id[e2]] = 0
-        right_entity[relation2id[relation]][entity2id[e2]] += 1 #(relation, e2)右连接的数量
-
+        right_entity[relation2id[relation]][entity2id[e2]] += 1 #(relation, e2)
     left_entity_avg = {}
     for i in range(len(relation2id)):
         left_entity_avg[i] = sum(
-            left_entity[i].values()) * 1.0 / len(left_entity[i]) #每个关系在左连接中的平均数（关系i连接每种源实体的平均数量）
+            left_entity[i].values()) * 1.0 / len(left_entity[i]) 
 
     right_entity_avg = {}
     for i in range(len(relation2id)):
         right_entity_avg[i] = sum(
-            right_entity[i].values()) * 1.0 / len(right_entity[i]) #每个关系在右连接中的平均数（关系i连接每种目标实体的平均数量）
-
+            right_entity[i].values()) * 1.0 / len(right_entity[i]) 
     headTailSelector = {}
     for i in range(len(relation2id)):
         headTailSelector[i] = 1000 * right_entity_avg[i] / \
-            (right_entity_avg[i] + left_entity_avg[i]) #表示关系尾部链接实体的平均数量与头部链接实体的平均数量之比。
+            (right_entity_avg[i] + left_entity_avg[i]) 
 
     return (train_triples, train_adjacency_mat), (validation_triples, valid_adjacency_mat), (test_triples, test_adjacency_mat), \
         entity2id, relation2id, headTailSelector, unique_entities_train
 
-#生成训练所需的三元组和邻接矩阵
-#对于(h,r,t),邻接矩阵train_cb_adjacency_mat的每行，cb_rows:t,cb_cols:h,cb_data:r
+
 def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,inductive_use_org = False,org_load_data = "org_load_data_pickle.pickle",cubic_from_reverse = False,reverse_load_data = "reverse_load_data_pickle.pickle"):
     entity2id = read_entity_from_id(path + 'entity2id.txt')
     relation2id = read_relation_from_id(path + 'relation2id.txt',directed)
@@ -174,7 +164,6 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
 
     # Adjacency matrix only required for training phase
     # Currenlty creating as unweighted, undirected
-    #返回：三元组id， (rows, cols, data)，出现过的实体名
     train_triples, train_adjacency_mat, unique_entities_train = load_data(os.path.join(
         path, 'train.txt'), entity2id, relation2id, is_unweigted, directed)
     validation_triples, valid_adjacency_mat, unique_entities_validation = load_data(
@@ -183,7 +172,7 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
         path, 'test.txt'), entity2id, relation2id, is_unweigted, directed)
     
 
-    id2entity = {v: k for k, v in entity2id.items()}#实体序号逆字典
+    id2entity = {v: k for k, v in entity2id.items()}
     id2relation = {v: k for k, v in relation2id.items()}#
     left_entity, right_entity = {}, {}
     id2cd_entity = {v: k for k, v in relation2id.items()}
@@ -209,7 +198,7 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
                 test_ent.add(e1_id)
                 test_ent.add(e2_id)
             org_file = path + org_load_data
-            if os.path.exists(org_file): #use transductive data???
+            if os.path.exists(org_file):
                 with open(org_file, 'rb') as handle:
                     load_data_pickle = pickle.load(handle)
                     _, _, _, _, _, headTailSelector, _,\
@@ -236,14 +225,14 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
                     left_entity[relation2id[relation]] = {}
                 if entity2id[e1] not in left_entity[relation2id[relation]]:
                     left_entity[relation2id[relation]][entity2id[e1]] = 0
-                left_entity[relation2id[relation]][entity2id[e1]] += 1 #(e1, relation)左连接的数量
+                left_entity[relation2id[relation]][entity2id[e1]] += 1 #(e1, relation)
 
                 # Count number of occurences for each (relation, e2)
                 if relation2id[relation] not in right_entity:
                     right_entity[relation2id[relation]] = {}
                 if entity2id[e2] not in right_entity[relation2id[relation]]:
                     right_entity[relation2id[relation]][entity2id[e2]] = 0
-                right_entity[relation2id[relation]][entity2id[e2]] += 1 #(relation, e2)右连接的数量
+                right_entity[relation2id[relation]][entity2id[e2]] += 1 #(relation, e2)
         elif cubic_from_reverse:
             org_file = path + reverse_load_data
             if os.path.exists(org_file): #use reverse data
@@ -253,7 +242,7 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
                     reverse_train_cb_data,_,_,cb_headTailSelector,_ = reverse_load_data_pickle
                     reverse_train_cb_triples, _ = reverse_train_cb_data
                 for e1_id, rel_id, e2_id in reverse_train_cb_triples:
-                    train_cb_triples.append((e2_id, rel_id, e1_id)) #id均与reverse相同
+                    train_cb_triples.append((e2_id, rel_id, e1_id))
                     unique_cb_entities.add(id2cd_entity[e1_id])
                     unique_cb_entities.add(id2cd_entity[e2_id])
                     
@@ -267,7 +256,7 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
                     if indx % 100== 0:
                         print("     Gen cubic ent ():",e2_id, rel_id, e1_id)
             for line in train_triples:
-                e1_id, rel_id, e2_id = line#读出为实体、关系的名字，需转为数字id
+                e1_id, rel_id, e2_id = line
                 e1 = id2entity[e1_id]
                 relation = id2relation[rel_id]
                 e2 = id2entity[e2_id]
@@ -277,24 +266,23 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
                     left_entity[relation2id[relation]] = {}
                 if entity2id[e1] not in left_entity[relation2id[relation]]:
                     left_entity[relation2id[relation]][entity2id[e1]] = 0
-                left_entity[relation2id[relation]][entity2id[e1]] += 1 #(e1, relation)左连接的数量
-
+                left_entity[relation2id[relation]][entity2id[e1]] += 1 #(e1, relation)
                 # Count number of occurences for each (relation, e2)
                 if relation2id[relation] not in right_entity:
                     right_entity[relation2id[relation]] = {}
                 if entity2id[e2] not in right_entity[relation2id[relation]]:
                     right_entity[relation2id[relation]][entity2id[e2]] = 0
-                right_entity[relation2id[relation]][entity2id[e2]] += 1 #(relation, e2)右连接的数量
+                right_entity[relation2id[relation]][entity2id[e2]] += 1 #(relation, e2)
         else:
             for line in train_triples:
-                e1_id, rel_id, e2_id = line#读出为实体、关系的名字，需转为数字id
+                e1_id, rel_id, e2_id = line
                 e1 = id2entity[e1_id]
                 relation = id2relation[rel_id]
                 e2 = id2entity[e2_id]
                 if indx % 1000== 0:
                     print("Gen triple:e1, relation, e2 :",indx,'/',count,'   ',e1_id,e1,'   ',rel_id, relation,'   ', e2_id,e2)
-                for tri in train_triples:#扫描训练集，抽取cubic关系
-                    #print("tri:",tri)
+                for tri in train_triples:
+
                     if e1_id == tri[2]:
                         if ((tri[1], e1_id, rel_id)) not in train_cb_triples:
                             train_cb_triples.append((tri[1], e1_id, rel_id))
@@ -336,14 +324,14 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
                     left_entity[relation2id[relation]] = {}
                 if entity2id[e1] not in left_entity[relation2id[relation]]:
                     left_entity[relation2id[relation]][entity2id[e1]] = 0
-                left_entity[relation2id[relation]][entity2id[e1]] += 1 #(e1, relation)左连接的数量
+                left_entity[relation2id[relation]][entity2id[e1]] += 1 #(e1, relation)
 
                 # Count number of occurences for each (relation, e2)
                 if relation2id[relation] not in right_entity:
                     right_entity[relation2id[relation]] = {}
                 if entity2id[e2] not in right_entity[relation2id[relation]]:
                     right_entity[relation2id[relation]][entity2id[e2]] = 0
-                right_entity[relation2id[relation]][entity2id[e2]] += 1 #(relation, e2)右连接的数量
+                right_entity[relation2id[relation]][entity2id[e2]] += 1 #(relation, e2)
         train_cb_adjacency_mat = (cb_rows, cb_cols, cb_data)
         train_cb_data_tmp = (train_cb_triples, train_cb_adjacency_mat,unique_cb_entities,left_entity,right_entity)
         with open(tmpfile, 'wb') as handle:
@@ -357,7 +345,7 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
     for i in range(len(relation2id)):
         if i in left_entity.keys():
             left_entity_avg[i] = sum(
-            left_entity[i].values()) * 1.0 / len(left_entity[i]) #每个关系在左连接中的平均数（关系i连接每种源实体的平均数量）
+            left_entity[i].values()) * 1.0 / len(left_entity[i]) #
         else:
             left_entity_avg[i] = 1e-5
 
@@ -365,7 +353,7 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
     for i in range(len(relation2id)):        
         if i in right_entity.keys():
             right_entity_avg[i] = sum(
-            right_entity[i].values()) * 1.0 / len(right_entity[i]) #每个关系在右连接中的平均数（关系i连接每种目标实体的平均数量）
+            right_entity[i].values()) * 1.0 / len(right_entity[i])
         else:
             right_entity_avg[i] = 1e-5
 
@@ -373,15 +361,15 @@ def build_cubic_data(path='./data/WN18RR/', is_unweigted=False, directed=True,in
     headTailSelector = {}
     for i in range(len(relation2id)):
         headTailSelector[i] = 1000 * right_entity_avg[i] / \
-            (right_entity_avg[i] + left_entity_avg[i]) #表示关系尾部链接实体的平均数量与头部链接实体的平均数量之比。
+            (right_entity_avg[i] + left_entity_avg[i])
     cb_headTailSelector = {}
     for i in range(len(cb_relation2id)):
-        cb_headTailSelector[i] = 1000 * 0.5 #表示关系尾部链接实体的平均数量与头部链接实体的平均数量之比。
+        cb_headTailSelector[i] = 1000 * 0.5 
 
     return (train_triples, train_adjacency_mat), (validation_triples, valid_adjacency_mat), (test_triples, test_adjacency_mat), \
         entity2id, relation2id, headTailSelector, unique_entities_train,(train_cb_triples, train_cb_adjacency_mat),cb_entity2id,cb_relation2id,cb_headTailSelector,list(unique_cb_entities)
 
-def sample_inductive(DATA_DIR):#平均策略，加权平均策略
+def sample_inductive(DATA_DIR):
     output_data = f"{DATA_DIR}/inductive2"
 
     #Mk sure every rel has 5 tripples at least   
@@ -404,7 +392,7 @@ def sample_inductive(DATA_DIR):#平均策略，加权平均策略
         if relation not in protect_train.keys():
             protect_train[relation] = count_train[relation]
             left_train[relation]=0
-        if protect_train[relation] < 10 and count_train[relation]<3800:   # 调整受保护的entity
+        if protect_train[relation] < 10 and count_train[relation]<3800:
             protect_entity.add(e1)
             protect_entity.add(e2)
         else:
@@ -412,8 +400,7 @@ def sample_inductive(DATA_DIR):#平均策略，加权平均策略
             left_train[relation] += 1
 
     print(f"{len(protect_entity)} protected entities., with {len(left_train)} relations unprotected. Count:")
-    # for rel,count in left_train.items():
-    #     print(rel,count,'/',count_train[rel])
+
     f.close()
     print("===============================")
     print("===============================")
