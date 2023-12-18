@@ -5,7 +5,7 @@ __pycache__/
 data_em/
 log/
 #/cppext/
-*.txt
+# *.txt
 *.sh
 *.out
 *.nt
